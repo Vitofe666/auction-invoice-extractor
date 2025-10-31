@@ -25,8 +25,8 @@ An intelligent tool that uses Gemini AI to extract and parse data from auction h
 1. Create a new **Web Service** on Render
 2. Connect your GitHub repository
 3. Configure:
-   - **Build Command**: `npm install --prefix ngrok-webhook-nodejs-sample`
-   - **Start Command**: `node ngrok-webhook-nodejs-sample/app.js`
+   - **Build Command**: `npm install --prefix backend`
+   - **Start Command**: `node backend/app.js`
    - **Environment Variables**:
      - `PORT`: 10000
      - `NODE_ENV`: production
@@ -41,7 +41,7 @@ An intelligent tool that uses Gemini AI to extract and parse data from auction h
 2. Install dependencies: `npm install`
 3. Set up environment variables in `.env`
 4. Start frontend: `npm run dev`
-5. Start backend: `cd ngrok-webhook-nodejs-sample && node app.js`
+4. Start backend: `cd backend && node app.js`
 
 ## Tech Stack
 
