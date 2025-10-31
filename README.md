@@ -1,20 +1,52 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Auction Invoice Extractor
 
-# Run and deploy your AI Studio app
+An intelligent tool that uses Gemini AI to extract and parse data from auction house invoices into structured JSON format, with direct integration to Xero accounting software.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/temp/2
+- 🤖 **AI-Powered Extraction**: Uses Google Gemini to intelligently parse invoice images
+- 📊 **Structured JSON Output**: Converts unstructured invoice data into clean, structured format
+- 💰 **VAT Handling**: Automatically detects and calculates VAT/tax amounts
+- 🔗 **Xero Integration**: Direct upload to Xero as bills/purchases
+- 🖼️ **Image Upload**: Supports various image formats for invoice processing
 
-## Run Locally
+## Deployment on Render
 
-**Prerequisites:**  Node.js
+### Frontend (Static Site)
+1. Create a new **Static Site** on Render
+2. Connect your GitHub repository
+3. Configure:
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+   - **Environment Variables**:
+     - `VITE_API_KEY`: Your Google Gemini API key
 
+### Backend (Web Service)
+1. Create a new **Web Service** on Render
+2. Connect your GitHub repository
+3. Configure:
+   - **Build Command**: `npm install --prefix ngrok-webhook-nodejs-sample`
+   - **Start Command**: `node ngrok-webhook-nodejs-sample/app.js`
+   - **Environment Variables**:
+     - `PORT`: 10000
+     - `NODE_ENV`: production
+     - `XERO_CLIENT_ID`: Your Xero app client ID
+     - `XERO_CLIENT_SECRET`: Your Xero app client secret
+     - `XERO_REDIRECT_URI`: https://your-backend-url.onrender.com/callback
+     - `XERO_WEBHOOK_KEY`: Your Xero webhook key
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Local Development
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Set up environment variables in `.env`
+4. Start frontend: `npm run dev`
+5. Start backend: `cd ngrok-webhook-nodejs-sample && node app.js`
+
+## Tech Stack
+
+- **Frontend**: React, TypeScript, Vite
+- **Backend**: Node.js, Express
+- **AI**: Google Gemini API
+- **Accounting**: Xero API
+- **Deployment**: Render
