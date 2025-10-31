@@ -7,6 +7,13 @@ var app = express();
 
 console.log('Starting server setup...');
 
+// Validate environment variables
+console.log('Environment variables check:');
+console.log('XERO_CLIENT_ID:', process.env.XERO_CLIENT_ID ? '✓ Set' : '❌ Missing');
+console.log('XERO_CLIENT_SECRET:', process.env.XERO_CLIENT_SECRET ? '✓ Set' : '❌ Missing');
+console.log('XERO_REDIRECT_URI:', process.env.XERO_REDIRECT_URI || '❌ Missing');
+console.log('XERO_WEBHOOK_KEY:', process.env.XERO_WEBHOOK_KEY ? '✓ Set' : '❌ Missing');
+
 // Initialize Xero client
 const xero = new XeroClient({
    clientId: process.env.XERO_CLIENT_ID,
@@ -14,6 +21,8 @@ const xero = new XeroClient({
    redirectUris: [process.env.XERO_REDIRECT_URI],
    scopes: 'openid profile email accounting.transactions accounting.contacts offline_access'.split(' ')
 });
+
+console.log('✓ Xero client initialized');
 
 // Store tokens in memory (for demo - use a database in production)
 let tokenSet = null;
@@ -118,20 +127,38 @@ app.get('/connect', async function (req, res) {
 
 // OAuth: Callback handler
 app.get('/callback', async function (req, res) {
+   console.log("-------------- OAuth Callback --------------");
+   console.log('Request URL:', req.url);
+   console.log('Query params:', req.query);
+   
    try {
+      console.log('Attempting Xero API callback...');
       tokenSet = await xero.apiCallback(req.url);
+      console.log('✓ Token set received:', !!tokenSet);
+      
+      console.log('Updating tenants...');
       await xero.updateTenants();
       
       const tenants = xero.tenants;
+      console.log('Available tenants:', tenants.length);
+      
       if (tenants.length > 0) {
          activeTenantId = tenants[0].tenantId;
          console.log('✓ Connected to Xero tenant:', tenants[0].tenantName);
+         console.log('✓ Tenant ID:', activeTenantId);
+      } else {
+         console.warn('⚠ No tenants found');
       }
       
       res.send('<h1>Successfully connected to Xero!</h1><p>You can close this window and return to your app.</p>');
    } catch (err) {
-      console.error('Error in OAuth callback:', err);
-      res.status(500).send('Error completing Xero authentication');
+      console.error('❌ Error in OAuth callback:', err);
+      console.error('Error details:', {
+         message: err.message,
+         stack: err.stack,
+         response: err.response?.data || 'No response data'
+      });
+      res.status(500).send(`Error completing Xero authentication: ${err.message}`);
    }
 });
 
