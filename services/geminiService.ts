@@ -93,11 +93,14 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set.");
+  // Try both environment variable formats for compatibility
+  const apiKey = process.env.API_KEY || (window as any).VITE_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("VITE_API_KEY environment variable is not set. Please add your Gemini API key to your Render environment variables.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey });
 
   try {
     const base64Image = await fileToBase64(imageFile);
