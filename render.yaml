@@ -1,0 +1,25 @@
+services:
+  # Frontend (React/Vite app)
+  - type: web
+    name: auction-invoice-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    
+  # Backend (Node.js webhook server)
+  - type: web
+    name: auction-invoice-backend
+    env: node
+    buildCommand: cd ngrok-webhook-nodejs-sample && npm install
+    startCommand: cd ngrok-webhook-nodejs-sample && node app.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: XERO_CLIENT_ID
+        sync: false
+      - key: XERO_CLIENT_SECRET
+        sync: false
+      - key: XERO_REDIRECT_URI
+        sync: false
+      - key: XERO_WEBHOOK_KEY
+        sync: false
