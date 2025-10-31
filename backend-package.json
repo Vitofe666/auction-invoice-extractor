@@ -1,0 +1,11 @@
+{
+  "name": "auction-invoice-backend",
+  "version": "1.0.0",
+  "description": "Backend server for auction invoice extractor",
+  "main": "ngrok-webhook-nodejs-sample/app.js",
+  "scripts": {
+    "start": "node ngrok-webhook-nodejs-sample/app.js",
+    "install-backend": "cd ngrok-webhook-nodejs-sample && npm install"
+  },
+  "dependencies": {}
+}
