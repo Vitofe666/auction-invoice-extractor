@@ -24,7 +24,8 @@ app.use(cors({
    origin: [
       'http://localhost:5173', 
       'http://localhost:3000',
-      'https://vitofe666-auction-frontend.onrender.com'
+      'https://vitofe666-auction-frontend.onrender.com',
+      'https://auction-invoice-extractor.onrender.com'
    ],
    credentials: true
 }));

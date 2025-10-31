@@ -1,7 +1,7 @@
 import type { InvoiceData, XeroBill } from '../types';
 
 const PROXY_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://vitofe666-auction-backend.onrender.com' 
+  ? 'https://auction-invoice-extractor-1.onrender.com' 
   : 'http://localhost:3002';
 
 /**
