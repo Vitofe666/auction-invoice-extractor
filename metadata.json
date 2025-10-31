@@ -1,0 +1,5 @@
+
+{
+  "name": "Auction Invoice Extractor",
+  "description": "An intelligent tool that uses Gemini to extract and parse data from auction house invoices into a structured JSON format. Simply upload an invoice image to get started."
+}
