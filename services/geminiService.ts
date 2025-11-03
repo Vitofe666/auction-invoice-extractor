@@ -14,9 +14,12 @@ Your process must be:
      * Look for indicators like "inc. VAT", "including VAT", "gross", or if VAT is already calculated in the total = amount is AFTER tax (VatIncluded: true)
      * If no clear indication, assume UK auction house standard: amounts typically INCLUDE VAT (VatIncluded: true)
    - For TaxRate: Use the VAT rate shown on invoice (typically 20% in UK), or 20 as default
-   - For TaxAmount: If VatIncluded=true, calculate as LineTotal - (LineTotal / (1 + TaxRate/100))
-   - For UnitPrice: always provide the base price before any VAT
-   - For LineTotal: provide the amount as shown on the invoice line
+   - For TaxAmount: Calculate the actual VAT amount that applies to this line
+   - For UnitPrice: always provide the base price before any VAT calculation
+   - For LineTotal: this should represent UnitPrice + TaxAmount (the total including VAT)
+   - For VAT calculation consistency:
+     * If VatIncluded=true: TaxAmount = LineTotal - (LineTotal / (1 + TaxRate/100))
+     * If VatIncluded=false: TaxAmount = UnitPrice * (TaxRate/100), LineTotal = UnitPrice + TaxAmount
    - Ensure VatIncluded is set correctly as this affects downstream processing
 4. The output MUST strictly adhere to the provided JSON schema. Do not generate any conversational text, explanations, or Markdown formatting.`;
 
@@ -68,7 +71,7 @@ const INVOICE_SCHEMA = {
           },
           LineTotal: { 
             type: Type.NUMBER,
-            description: 'The total amount for this line as shown on the invoice.'
+            description: 'The total amount for this line: UnitPrice + TaxAmount (including any VAT/tax).'
           }
         },
         required: ['LineType', 'LotNumber', 'Description', 'Quantity', 'UnitPrice', 'TaxType', 'TaxRate', 'TaxAmount', 'VatIncluded', 'LineTotal']

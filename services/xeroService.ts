@@ -22,26 +22,26 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
     CurrencyCode: invoiceData.Currency,
     Status: 'DRAFT',
     LineItems: invoiceData.LineItems.map(item => {
-      // Calculate the pre-tax unit amount and line amount
+      // For Xero, we need to send the pre-tax amounts only
+      // The line total should be UnitPrice + TaxAmount (excluding VAT from the line amount)
       let preVatUnitAmount: number;
       let preVatLineAmount: number;
       
-      if (item.VatIncluded && item.TaxAmount && item.TaxAmount > 0) {
-        // If VAT is included, calculate pre-tax amounts
+      // Based on your requirement: "line total should be Unit price + Tax amount, and no VAT"
+      // This means Xero expects the pre-tax amount, and it will calculate VAT separately
+      
+      if (item.TaxAmount && item.TaxAmount > 0) {
+        // If we have tax amount specified, the pre-tax amount is LineTotal - TaxAmount
         preVatLineAmount = item.LineTotal - item.TaxAmount;
         preVatUnitAmount = preVatLineAmount / item.Quantity;
-      } else if (!item.VatIncluded) {
-        // If VAT is not included, use amounts as-is
-        preVatUnitAmount = item.UnitPrice;
-        preVatLineAmount = item.LineTotal;
-      } else if (item.TaxRate && item.TaxRate > 0) {
-        // Calculate pre-tax amounts using tax rate
+      } else if (item.VatIncluded && item.TaxRate && item.TaxRate > 0) {
+        // If VAT is included in the price, extract it using the tax rate
         preVatLineAmount = item.LineTotal / (1 + (item.TaxRate / 100));
         preVatUnitAmount = preVatLineAmount / item.Quantity;
       } else {
-        // Fallback: assume 20% VAT is included
-        preVatLineAmount = item.LineTotal / 1.2;
-        preVatUnitAmount = preVatLineAmount / item.Quantity;
+        // No VAT or VAT not included - use amounts as-is
+        preVatUnitAmount = item.UnitPrice;
+        preVatLineAmount = item.UnitPrice * item.Quantity;
       }
       
       // Round to 2 decimal places to avoid floating point precision issues
