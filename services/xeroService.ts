@@ -84,11 +84,13 @@ export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: st
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(xeroBillPayload),
+    mode: 'cors'
   });
 
   const result = await response.json();
 
   if (!response.ok) {
+    console.error("Upload failed:", response.status, response.statusText, result);
     throw new Error(result.error || "Failed to upload bill via proxy.");
   }
 
@@ -102,9 +104,18 @@ export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: st
 export const checkXeroConnection = async (): Promise<boolean> => {
     try {
         console.log('Checking Xero connection at:', `${PROXY_URL}/connection-status`);
-        const response = await fetch(`${PROXY_URL}/connection-status`);
+        const response = await fetch(`${PROXY_URL}/connection-status`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            mode: 'cors'
+        });
         console.log('Connection response status:', response.ok);
-        if (!response.ok) return false;
+        if (!response.ok) {
+            console.error('Response not ok:', response.status, response.statusText);
+            return false;
+        }
         const data = await response.json();
         console.log('Connection data:', data);
         return data.isConnected;
