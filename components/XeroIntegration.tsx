@@ -3,6 +3,7 @@ import { uploadBillToXero, checkXeroConnection } from '../services/xeroService';
 import type { InvoiceData } from '../types';
 import { ExternalLinkIcon, CheckCircleIcon } from './icons';
 import Loader from './Loader';
+import DirectXeroUpload from './DirectXeroUpload';
 
 interface XeroIntegrationProps {
   invoiceData: InvoiceData;
@@ -111,6 +112,9 @@ const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData }) => {
           )}
         </div>
       )}
+      
+      {/* Show Direct Upload when connected */}
+      {isConnected && <DirectXeroUpload />}
     </div>
   );
 };
