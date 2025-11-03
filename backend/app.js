@@ -34,9 +34,13 @@ app.use(cors({
       'http://localhost:5173', 
       'http://localhost:3000',
       'https://vitofe666-auction-frontend.onrender.com',
-      'https://auction-invoice-extractor.onrender.com'
+      'https://auction-invoice-extractor.onrender.com',
+      'https://auction-invoice-frontend.onrender.com',
+      /\.onrender\.com$/
    ],
-   credentials: true
+   credentials: true,
+   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Capture raw body for webhook signature verification.
