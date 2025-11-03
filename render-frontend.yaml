@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: auction-invoice-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_KEY
+        value: AIzaSyCHXMJKxw6eS-u1hfgGVB9wzBfQn3bAjzI
