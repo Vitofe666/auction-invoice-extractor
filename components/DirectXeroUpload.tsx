@@ -71,7 +71,7 @@ const DirectXeroUpload: React.FC = () => {
 
   return (
     <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 mt-6">
-      <h3 className="text-xl font-bold text-cyan-400 mb-4">5. Direct Upload to Xero</h3>
+      <h3 className="text-xl font-bold text-cyan-400 mb-4">5. Quick Upload to Xero</h3>
       
       {step === 'upload' && (
         <div className="space-y-4">
