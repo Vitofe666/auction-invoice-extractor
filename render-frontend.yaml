@@ -7,3 +7,5 @@ services:
     envVars:
       - key: VITE_API_KEY
         value: AIzaSyCHXMJKxw6eS-u1hfgGVB9wzBfQn3bAjzI
+      - key: NODE_ENV
+        value: production
