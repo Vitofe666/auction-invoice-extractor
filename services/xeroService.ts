@@ -1,8 +1,7 @@
 import type { InvoiceData, XeroBill } from '../types';
 
-const PROXY_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://auction-invoice-extractor-1.onrender.com' 
-  : 'http://localhost:3002';
+// Always use the deployed backend for Xero operations
+const PROXY_URL = 'https://auction-invoice-extractor-1.onrender.com';
 
 /**
  * Maps the extracted invoice data to the format required by the Xero API for creating a bill.
