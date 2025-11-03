@@ -101,9 +101,12 @@ export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: st
  */
 export const checkXeroConnection = async (): Promise<boolean> => {
     try {
+        console.log('Checking Xero connection at:', `${PROXY_URL}/connection-status`);
         const response = await fetch(`${PROXY_URL}/connection-status`);
+        console.log('Connection response status:', response.ok);
         if (!response.ok) return false;
         const data = await response.json();
+        console.log('Connection data:', data);
         return data.isConnected;
     } catch (err) {
         console.error("Failed to check Xero connection status:", err);

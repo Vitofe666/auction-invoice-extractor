@@ -113,8 +113,8 @@ const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData }) => {
         </div>
       )}
       
-      {/* Show Direct Upload when connected */}
-      {isConnected && <DirectXeroUpload />}
+      {/* Show Direct Upload always for testing - TODO: change back to isConnected check */}
+      <DirectXeroUpload />
     </div>
   );
 };
