@@ -2,26 +2,49 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { InvoiceData } from "../types";
 
 // FIX: Replaced the long, combined prompt with structured components for the Gemini API.
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine. Your sole function is to accept an image of a purchase invoice, specifically auction house bills that contain itemized "lots," and convert the data into a strict JSON format.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
 
-Your process must be:
-1. Analyze the document to identify the key header information and the itemized line-item details (lots).
-2. Extract Header Information: Find the Invoice Number, Invoice Date, Supplier Name, and Total Invoice Amount (including VAT/Tax).
-3. Extract Line Items (Lots): For each "Lot" listed, carefully analyze:
-   - Extract the Lot Number, Description, and amounts
-   - CRITICALLY IMPORTANT: Determine if each line item amount is "plus VAT" or "including VAT":
-     * Look for indicators like "plus VAT", "+ VAT", "excl. VAT", "net" = amount is BEFORE tax (VatIncluded: false)
-     * Look for indicators like "inc. VAT", "including VAT", "gross", or if VAT is already calculated in the total = amount is AFTER tax (VatIncluded: true)
-     * If no clear indication, assume UK auction house standard: amounts typically INCLUDE VAT (VatIncluded: true)
-   - For TaxRate: Use the VAT rate shown on invoice (typically 20% in UK), or 20 as default
-   - For TaxAmount: Calculate the actual VAT amount that applies to this line
-   - For UnitPrice: always provide the base price before any VAT calculation
-   - For LineTotal: this should represent UnitPrice + TaxAmount (the total including VAT)
-   - For VAT calculation consistency:
-     * If VatIncluded=true: TaxAmount = LineTotal - (LineTotal / (1 + TaxRate/100))
-     * If VatIncluded=false: TaxAmount = UnitPrice * (TaxRate/100), LineTotal = UnitPrice + TaxAmount
-   - Ensure VatIncluded is set correctly as this affects downstream processing
-4. The output MUST strictly adhere to the provided JSON schema. Do not generate any conversational text, explanations, or Markdown formatting.`;
+AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
+
+1. **HAMMER PRICE (VAT EXEMPT)**:
+   - LineType: "Lot" 
+   - Description contains: "hammer price", "Hammer Price", "lot price", or is just the item description
+   - TaxType: null
+   - TaxRate: 0
+   - TaxAmount: 0
+   - VatIncluded: false
+   - LineTotal: exactly the UnitPrice (no VAT added)
+
+2. **BUYERS PREMIUM (VAT EXEMPT)**:
+   - LineType: "Premium"
+   - Description contains: "Buyers Premium", "buyers premium", "Premium", "Buyer's Premium"
+   - TaxType: null
+   - TaxRate: 0
+   - TaxAmount: 0
+   - VatIncluded: false
+   - LineTotal: exactly the UnitPrice (no VAT added)
+
+3. **ALL OTHER CHARGES (PLUS VAT - 20%)**:
+   - LineType: "Surcharge" or any other type
+   - Description: "Live Bidding Surcharge", "Postage", "Packing", "Insurance", "Commission", etc.
+   - TaxType: "VAT"
+   - TaxRate: 20
+   - TaxAmount: UnitPrice × 0.20
+   - VatIncluded: false
+   - LineTotal: UnitPrice + TaxAmount
+
+EXTRACTION PROCESS:
+1. Analyze the document to identify header information (Invoice Number, Date, Supplier Name, Total Amount, Currency)
+2. For each line item, determine the LineType based on what it represents:
+   - "Lot" = the actual auction item/hammer price
+   - "Premium" = buyers premium
+   - "Surcharge" = any additional charges (postage, packing, live bidding fees, etc.)
+3. Apply the VAT rules above based on the LineType and Description
+4. Ensure mathematical accuracy: LineTotal = UnitPrice + TaxAmount
+5. Double-check that VAT exempt items have TaxAmount = 0 and LineTotal = UnitPrice
+6. Double-check that VAT applicable items have TaxAmount = UnitPrice × 0.20
+
+The output MUST strictly adhere to the provided JSON schema. Do not generate any conversational text, explanations, or Markdown formatting.`;
 
 const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
 
@@ -55,23 +78,23 @@ const INVOICE_SCHEMA = {
           },
           TaxType: { 
             type: Type.STRING, 
-            description: "Type of tax applied (e.g., 'VAT', 'GST'). Return null if not applicable." 
+            description: "Set to 'VAT' for items with 20% VAT (surcharges), or null for VAT exempt items (lots and buyers premium)." 
           },
           TaxRate: {
             type: Type.NUMBER,
-            description: "Tax rate as a percentage (e.g., 20 for 20% VAT). Return null if not applicable."
+            description: "Tax rate: 20 for surcharges with VAT, 0 for VAT exempt lots and buyers premium."
           },
           TaxAmount: { 
             type: Type.NUMBER, 
-            description: "Amount of tax in currency units. Return null if not applicable." 
+            description: "Amount of VAT: UnitPrice × 0.20 for surcharges, 0 for lots and buyers premium." 
           },
           VatIncluded: {
             type: Type.BOOLEAN,
-            description: "True if the LineTotal includes VAT/tax, false if VAT is to be added on top."
+            description: "Always false for auction houses - VAT is either exempt or added separately."
           },
           LineTotal: { 
             type: Type.NUMBER,
-            description: 'The total amount for this line: UnitPrice + TaxAmount (including any VAT/tax).'
+            description: 'Total amount: UnitPrice + TaxAmount. For VAT exempt items, equals UnitPrice. For VAT items, equals UnitPrice + (UnitPrice × 0.20).'
           }
         },
         required: ['LineType', 'LotNumber', 'Description', 'Quantity', 'UnitPrice', 'TaxType', 'TaxRate', 'TaxAmount', 'VatIncluded', 'LineTotal']

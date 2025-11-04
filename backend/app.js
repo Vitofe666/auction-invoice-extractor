@@ -226,7 +226,8 @@ app.post('/upload-bill', upload.single('invoiceFile'), async function (req, res)
             quantity: item.Quantity,
             unitAmount: item.UnitAmount,
             accountCode: item.AccountCode,
-            lineAmount: item.LineAmount
+            lineAmount: item.LineAmount,
+            taxType: item.TaxType || 'NONE' // Include tax type, default to NONE if not specified
          })) || []
       };
       

@@ -52,12 +52,38 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
       // This is critical for Xero validation
       const calculatedLineAmount = Math.round((preVatUnitAmount * item.Quantity) * 100) / 100;
       
+      // Determine the appropriate Xero tax type based on the invoice data
+      let xeroTaxType = 'NONE'; // Default to no tax
+      
+      if (item.TaxType === 'VAT' && item.TaxRate && item.TaxRate > 0) {
+        // Map VAT rates to standard UK Xero tax types
+        if (item.TaxRate === 20) {
+          xeroTaxType = 'INPUT2'; // 20% VAT on Purchases (for bills/expenses)
+        } else if (item.TaxRate === 5) {
+          xeroTaxType = 'INPUT'; // 5% VAT on Purchases
+        } else {
+          // For other VAT rates, use the 20% rate as default
+          xeroTaxType = 'INPUT2'; // 20% VAT on Purchases
+        }
+      } else if (item.TaxRate === 0 || item.TaxAmount === 0) {
+        // VAT Exempt items (like Hammer Price and Buyers Premium)
+        xeroTaxType = 'EXEMPTEXPENSES'; // VAT Exempt for expenses
+      } else {
+        xeroTaxType = 'NONE'; // No tax applicable
+      }
+      
+      // Log VAT processing for debugging
+      console.log(`Processing line item: ${item.Description}`);
+      console.log(`  LineType: ${item.LineType}, TaxRate: ${item.TaxRate}, TaxAmount: ${item.TaxAmount}`);
+      console.log(`  Xero TaxType: ${xeroTaxType}, Pre-VAT Amount: ${preVatUnitAmount}`);
+      
       return {
         Description: `${item.LineType} - ${item.LotNumber ? `Lot #${item.LotNumber}` : ''} - ${item.Description}`.trim(),
         Quantity: item.Quantity,
         UnitAmount: preVatUnitAmount,
         AccountCode: accountCode,
         LineAmount: calculatedLineAmount, // Use calculated amount to ensure consistency
+        TaxType: xeroTaxType, // Add tax type for Xero
       };
     }),
   };
