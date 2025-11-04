@@ -67,9 +67,10 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
  * Sends the formatted bill data to our backend proxy, which then uploads it to Xero.
  * @param invoiceData The extracted data from the invoice.
  * @param accountCode The default Xero expense account code.
+ * @param originalFile The original invoice image file to attach to the Xero bill.
  * @returns A promise that resolves with a success message from the server.
  */
-export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: string): Promise<string> => {
+export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: string, originalFile?: File): Promise<string> => {
   console.log("Sending invoice data to backend proxy...");
 
   if (!accountCode.trim()) {
@@ -78,12 +79,18 @@ export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: st
 
   const xeroBillPayload = mapToXeroBill(invoiceData, accountCode);
 
+  // Create FormData to include both JSON and file
+  const formData = new FormData();
+  formData.append('billData', JSON.stringify(xeroBillPayload));
+  
+  if (originalFile) {
+    formData.append('invoiceFile', originalFile);
+    console.log("Including original invoice file:", originalFile.name);
+  }
+
   const response = await fetch(`${PROXY_URL}/upload-bill`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(xeroBillPayload),
+    body: formData, // Use FormData instead of JSON
     mode: 'cors'
   });
 

@@ -2,10 +2,19 @@ require('dotenv').config();
 var express = require('express');
 var cors = require('cors');
 var crypto = require('crypto');
+var multer = require('multer');
 var { XeroClient } = require('xero-node');
 var app = express();
 
 console.log('Starting server setup...');
+
+// Configure multer for file uploads (store in memory)
+const upload = multer({ 
+   storage: multer.memoryStorage(),
+   limits: {
+      fileSize: 10 * 1024 * 1024 // 10MB limit
+   }
+});
 
 // Validate environment variables
 console.log('Environment variables check:');
@@ -166,10 +175,28 @@ app.get('/callback', async function (req, res) {
    }
 });
 
-// Handle bill upload from frontend
-app.post('/upload-bill', async function (req, res) {
+// Handle bill upload from frontend (with optional file attachment)
+app.post('/upload-bill', upload.single('invoiceFile'), async function (req, res) {
    console.log("-------------- New Bill Upload Request --------------");
-   console.log("Bill Data:", JSON.stringify(req.body, null, 2));
+   
+   // Parse the bill data from form data
+   let billData;
+   try {
+      billData = JSON.parse(req.body.billData);
+      console.log("Bill Data:", JSON.stringify(billData, null, 2));
+   } catch (err) {
+      console.error("Error parsing bill data:", err);
+      return res.status(400).json({ error: 'Invalid bill data format' });
+   }
+   
+   // Log file info if present
+   if (req.file) {
+      console.log("File attachment:", {
+         originalName: req.file.originalname,
+         mimeType: req.file.mimetype,
+         size: req.file.size
+      });
+   }
    
    // Check if connected to Xero
    if (!tokenSet || !activeTenantId) {
@@ -185,16 +212,16 @@ app.post('/upload-bill', async function (req, res) {
       
       // Prepare the invoice data in Xero's expected format
       const invoice = {
-         type: req.body.Type || 'ACCPAY',
+         type: billData.Type || 'ACCPAY',
          contact: {
-            name: req.body.Contact?.Name || req.body.Contact?.name
+            name: billData.Contact?.Name || billData.Contact?.name
          },
-         date: req.body.DateString,
-         dueDate: req.body.DueDateString,
-         invoiceNumber: req.body.InvoiceNumber,
-         currencyCode: req.body.CurrencyCode || 'GBP',
-         status: req.body.Status || 'DRAFT',
-         lineItems: req.body.LineItems?.map(item => ({
+         date: billData.DateString,
+         dueDate: billData.DueDateString,
+         invoiceNumber: billData.InvoiceNumber,
+         currencyCode: billData.CurrencyCode || 'GBP',
+         status: billData.Status || 'DRAFT',
+         lineItems: billData.LineItems?.map(item => ({
             description: item.Description,
             quantity: item.Quantity,
             unitAmount: item.UnitAmount,
@@ -209,12 +236,40 @@ app.post('/upload-bill', async function (req, res) {
          invoices: [invoice]
       });
       
-      console.log('✓ Bill uploaded to Xero:', response.body.invoices[0].invoiceID);
+      const createdInvoice = response.body.invoices[0];
+      const invoiceId = createdInvoice.invoiceID;
+      
+      console.log('✓ Bill uploaded to Xero:', invoiceId);
+      
+      // If a file was uploaded, attach it to the invoice
+      if (req.file && invoiceId) {
+         try {
+            console.log('Attaching file to Xero invoice...');
+            
+            const attachmentResponse = await xero.accountingApi.createInvoiceAttachmentByFileName(
+               activeTenantId,
+               invoiceId,
+               req.file.originalname,
+               req.file.buffer,
+               {
+                  headers: {
+                     'Content-Type': req.file.mimetype
+                  }
+               }
+            );
+            
+            console.log('✓ File attached to Xero invoice:', attachmentResponse.body.attachments[0].attachmentID);
+         } catch (attachError) {
+            console.error('⚠ Error attaching file to Xero invoice:', attachError.response?.body || attachError);
+            // Don't fail the whole request if attachment fails
+         }
+      }
       
       res.json({ 
          success: true, 
-         message: "Bill successfully uploaded to Xero",
-         invoiceId: response.body.invoices[0].invoiceID
+         message: "Bill successfully uploaded to Xero" + (req.file ? " with attachment" : ""),
+         invoiceId: invoiceId,
+         hasAttachment: !!req.file
       });
    } catch (err) {
       console.error('Error uploading bill to Xero:', err.response?.body || err);

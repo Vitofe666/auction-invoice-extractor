@@ -6,9 +6,10 @@ import Loader from './Loader';
 
 interface DirectXeroUploadProps {
   invoiceData: InvoiceData | null;
+  originalFile?: File;
 }
 
-const DirectXeroUpload: React.FC<DirectXeroUploadProps> = ({ invoiceData }) => {
+const DirectXeroUpload: React.FC<DirectXeroUploadProps> = ({ invoiceData, originalFile }) => {
   const [accountCode, setAccountCode] = useState<string>('429');
   const [isUploading, setIsUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -28,7 +29,7 @@ const DirectXeroUpload: React.FC<DirectXeroUploadProps> = ({ invoiceData }) => {
     setStatusMessage(null);
 
     try {
-      const successMessage = await uploadBillToXero(invoiceData, accountCode);
+      const successMessage = await uploadBillToXero(invoiceData, accountCode, originalFile);
       setStatusMessage({ type: 'success', text: successMessage });
     } catch (err) {
       setStatusMessage({ 
@@ -94,6 +95,17 @@ const DirectXeroUpload: React.FC<DirectXeroUploadProps> = ({ invoiceData }) => {
             />
           </div>
 
+          {originalFile && (
+            <div className="bg-blue-900/30 p-3 rounded-lg">
+              <p className="text-sm text-blue-300">
+                📎 <strong>File attachment ready:</strong> {originalFile.name}
+              </p>
+              <p className="text-xs text-blue-400 mt-1">
+                The original invoice file will be attached to the Xero bill
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handleUploadToXero}
             disabled={!accountCode || isUploading}
@@ -102,10 +114,10 @@ const DirectXeroUpload: React.FC<DirectXeroUploadProps> = ({ invoiceData }) => {
             {isUploading ? (
               <>
                 <Loader />
-                <span className="ml-2">Uploading JSON to Xero...</span>
+                <span className="ml-2">Uploading to Xero{originalFile ? ' with attachment' : ''}...</span>
               </>
             ) : (
-              '📤 Upload JSON Data to Xero'
+              `📤 Upload JSON${originalFile ? ' + File' : ''} to Xero`
             )}
           </button>
 

@@ -7,9 +7,10 @@ import DirectXeroUpload from './DirectXeroUpload';
 
 interface XeroIntegrationProps {
   invoiceData: InvoiceData;
+  originalFile?: File;
 }
 
-const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData }) => {
+const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData, originalFile }) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(true);
   const [accountCode, setAccountCode] = useState<string>('');
@@ -33,7 +34,7 @@ const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData }) => {
     setIsLoading(true);
     setStatusMessage(null);
     try {
-      const successMessage = await uploadBillToXero(invoiceData, accountCode);
+      const successMessage = await uploadBillToXero(invoiceData, accountCode, originalFile);
       setStatusMessage({ type: 'success', text: successMessage });
     } catch (err) {
       setStatusMessage({ type: 'error', text: err instanceof Error ? err.message : 'An unknown error occurred.' });
@@ -114,7 +115,7 @@ const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData }) => {
       )}
       
       {/* Show Direct Upload always for testing - TODO: change back to isConnected check */}
-      <DirectXeroUpload invoiceData={invoiceData} />
+      <DirectXeroUpload invoiceData={invoiceData} originalFile={originalFile} />
     </div>
   );
 };

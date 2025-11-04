@@ -213,7 +213,7 @@ const App: React.FC = () => {
                             }
                           }}
                         />
-                        <XeroIntegration invoiceData={item.data} />
+                        <XeroIntegration invoiceData={item.data} originalFile={item.file} />
                       </div>
                     )}
                     {item.error && (
@@ -242,7 +242,7 @@ const App: React.FC = () => {
                     }
                   }}
                 />
-                <XeroIntegration invoiceData={extractedData} />
+                <XeroIntegration invoiceData={extractedData} originalFile={imageFile} />
               </div>
             )}
           </div>
