@@ -17,7 +17,7 @@ AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
 2. **BUYERS PREMIUM (VAT EXEMPT)**:
    - LineType: "Premium"
-   - Description contains: "Buyers Premium", "buyers premium", "Premium", "Buyer's Premium"
+   - Description contains: "Buyers Premium", "buyers premium", "Premium", "Buyer's Premium", or just "premium"
    - TaxType: null
    - TaxRate: 0
    - TaxAmount: 0

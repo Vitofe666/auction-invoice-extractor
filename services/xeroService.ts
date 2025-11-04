@@ -55,7 +55,10 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
       // Determine the appropriate Xero tax type based on the invoice data
       let xeroTaxType = 'NONE'; // Default to no tax
       
-      if (item.TaxType === 'VAT' && item.TaxRate && item.TaxRate > 0) {
+      // Auction house specific logic: Lots and Premiums are VAT exempt
+      if (item.LineType === 'Lot' || item.LineType === 'Premium') {
+        xeroTaxType = 'EXEMPTEXPENSES'; // VAT Exempt for auction lots and premiums
+      } else if (item.TaxType === 'VAT' && item.TaxRate && item.TaxRate > 0) {
         // Map VAT rates to standard UK Xero tax types
         if (item.TaxRate === 20) {
           xeroTaxType = 'INPUT2'; // 20% VAT on Purchases (for bills/expenses)
@@ -66,7 +69,7 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
           xeroTaxType = 'INPUT2'; // 20% VAT on Purchases
         }
       } else if (item.TaxRate === 0 || item.TaxAmount === 0) {
-        // VAT Exempt items (like Hammer Price and Buyers Premium)
+        // Other VAT Exempt items
         xeroTaxType = 'EXEMPTEXPENSES'; // VAT Exempt for expenses
       } else {
         xeroTaxType = 'NONE'; // No tax applicable
