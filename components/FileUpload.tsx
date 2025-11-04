@@ -42,10 +42,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled, multipl
   }, [disabled, onFileSelect, multiple]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('File input changed:', e.target.files);
     if (e.target.files && e.target.files.length > 0) {
       if (multiple) {
+        console.log('Multiple files selected:', Array.from(e.target.files));
         onFileSelect(Array.from(e.target.files));
       } else {
+        console.log('Single file selected:', e.target.files[0]);
         onFileSelect(e.target.files[0]);
       }
     }

@@ -26,8 +26,11 @@ const App: React.FC = () => {
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
 
   const handleFileChange = (fileOrFiles: File | File[]) => {
+    console.log('App.tsx - handleFileChange called with:', fileOrFiles);
+    
     if (Array.isArray(fileOrFiles)) {
       // Batch mode
+      console.log('App.tsx - Batch mode activated with', fileOrFiles.length, 'files');
       setBatchMode(true);
       setInvoiceItems(fileOrFiles.map(file => ({
         file,
@@ -40,6 +43,7 @@ const App: React.FC = () => {
       setError(null);
     } else if (fileOrFiles) {
       // Single mode
+      console.log('App.tsx - Single mode activated with file:', fileOrFiles.name, fileOrFiles.type);
       setBatchMode(false);
       setInvoiceItems([]);
       setImageFile(fileOrFiles);
