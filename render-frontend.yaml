@@ -11,4 +11,3 @@ services:
         value: https://auction-invoice-extractor-1.onrender.com
       - key: NODE_ENV
         value: production
-        value: production
