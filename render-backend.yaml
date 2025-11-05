@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: auction-invoice-backend
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node app.js
+    envVars:
+      - key: XERO_CLIENT_ID
+        sync: false  # Set this manually in Render dashboard
+      - key: XERO_CLIENT_SECRET
+        sync: false  # Set this manually in Render dashboard
+      - key: XERO_REDIRECT_URI
+        value: https://vitofe666-auction-invoice-backend.onrender.com/callback
+      - key: XERO_WEBHOOK_KEY
+        sync: false  # Set this manually in Render dashboard
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
