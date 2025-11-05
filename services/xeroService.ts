@@ -57,7 +57,9 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
       
       // Auction house specific logic: Lots and Premiums are VAT exempt
       if (item.LineType === 'Lot' || item.LineType === 'Premium') {
-        xeroTaxType = 'EXEMPTEXPENSES'; // VAT Exempt for auction lots and premiums
+        // For VAT exempt auction items, use NONE instead of EXEMPTEXPENSES
+        // EXEMPTEXPENSES is for specific exempt supplies, auction lots are zero-rated/exempt
+        xeroTaxType = 'NONE'; // No VAT for auction lots and buyers premium
       } else if (item.TaxType === 'VAT' && item.TaxRate && item.TaxRate > 0) {
         // Map VAT rates to standard UK Xero tax types
         if (item.TaxRate === 20) {
@@ -69,8 +71,8 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
           xeroTaxType = 'INPUT2'; // 20% VAT on Purchases
         }
       } else if (item.TaxRate === 0 || item.TaxAmount === 0) {
-        // Other VAT Exempt items
-        xeroTaxType = 'EXEMPTEXPENSES'; // VAT Exempt for expenses
+        // Other VAT Exempt items - use NONE for zero-rated supplies
+        xeroTaxType = 'NONE'; // No tax applicable
       } else {
         xeroTaxType = 'NONE'; // No tax applicable
       }
@@ -79,6 +81,7 @@ const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill 
       console.log(`Processing line item: ${item.Description}`);
       console.log(`  LineType: ${item.LineType}, TaxRate: ${item.TaxRate}, TaxAmount: ${item.TaxAmount}`);
       console.log(`  Xero TaxType: ${xeroTaxType}, Pre-VAT Amount: ${preVatUnitAmount}`);
+      console.log(`  Account Code: ${accountCode}`);
       
       return {
         Description: `${item.LineType} - ${item.LotNumber ? `Lot #${item.LotNumber}` : ''} - ${item.Description}`.trim(),
@@ -127,6 +130,19 @@ export const uploadBillToXero = async (invoiceData: InvoiceData, accountCode: st
 
   if (!response.ok) {
     console.error("Upload failed:", response.status, response.statusText, result);
+    
+    // Enhanced error handling for Xero validation errors
+    if (result.error && typeof result.error === 'object' && result.error.body) {
+      const xeroError = result.error.body;
+      if (xeroError.Elements && xeroError.Elements.length > 0) {
+        const validationErrors = xeroError.Elements[0].ValidationErrors;
+        if (validationErrors && validationErrors.length > 0) {
+          const errorMessages = validationErrors.map(err => err.Message).join('; ');
+          throw new Error(`Xero validation failed: ${errorMessages}`);
+        }
+      }
+    }
+    
     throw new Error(result.error || "Failed to upload bill via proxy.");
   }
 
