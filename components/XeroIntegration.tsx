@@ -59,7 +59,7 @@ const XeroIntegration: React.FC<XeroIntegrationProps> = ({ invoiceData, original
         <div className="text-center">
           <p className="text-gray-400 mb-4">Connect your Xero account to upload this invoice as a bill.</p>
                     <a
-            href={`${process.env.NODE_ENV === 'production' ? 'https://auction-invoice-extractor-1.onrender.com' : 'http://localhost:3002'}/connect`}
+            href={`${process.env.NODE_ENV === 'production' ? 'https://vitofe666-auction-invoice-backend.onrender.com' : 'http://localhost:3002'}/connect`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"

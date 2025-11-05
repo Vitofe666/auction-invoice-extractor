@@ -6,6 +6,9 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_KEY
-        value: AIzaSyCHXMJKxw6eS-u1hfgGVB9wzBfQn3bAjzI
+        sync: false  # Set this manually in Render dashboard for security
+      - key: VITE_BACKEND_URL
+        value: https://vitofe666-auction-invoice-backend.onrender.com
       - key: NODE_ENV
+        value: production
         value: production
