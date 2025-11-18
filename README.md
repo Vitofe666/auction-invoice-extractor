@@ -50,3 +50,29 @@ An intelligent tool that uses Gemini AI to extract and parse data from auction h
 - **AI**: Google Gemini API
 - **Accounting**: Xero API
 - **Deployment**: Render
+
+- ```markdown
+Server-side Gemini proxy
+
+Why
+- Keeps the Gemini API key secret (server-only).
+- Avoids build-time vs runtime env var issues with Vite.
+
+What to set
+- Set GEMINI_API_KEY in your Render (or server) runtime environment variables. This key must NOT be exposed to the browser.
+
+Local development
+1. Install dependencies:
+   npm install
+
+2. Run server (development):
+   npm run dev:server
+   (This uses ts-node; for a production build compile the server and run node.)
+
+3. Run Vite client:
+   npm run dev
+
+How the flow works
+- The client uploads the invoice image (multipart/form-data field name "image") to POST /api/extract-invoice.
+- The server calls Gemini using GEMINI_API_KEY, returns structured JSON to the client.
+```
