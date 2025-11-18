@@ -17,6 +17,12 @@ const __dirname = path.dirname(__filename);
  * - POST /api/extract-invoice endpoint using multer (memory storage)
  * - Robust error handling with JSON responses
  * 
+ * SECURITY NOTE: This example uses multer 1.x which has known vulnerabilities.
+ * For production use, upgrade to multer 2.x:
+ *   npm install multer@^2.0.0
+ * 
+ * Multer 2.x is backward compatible for basic use cases.
+ * 
  * Usage:
  * 1. Build: npx tsc examples/server.ts --outDir dist/examples --esModuleInterop --moduleResolution node --module commonjs
  * 2. Run: node dist/examples/server.js
