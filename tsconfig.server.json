@@ -4,8 +4,6 @@
     "module": "CommonJS",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "outDir": "./dist",
-    "rootDir": ".",
     "outDir": "./dist/server",
     "rootDir": "./",
     "moduleResolution": "node",
@@ -16,15 +14,6 @@
     "types": ["node"],
     "allowImportingTsExtensions": false
   },
-  "include": ["server/**/*"],
-  "exclude": ["node_modules", "dist"],
-  "ts-node": {
-    "compilerOptions": {
-      "module": "CommonJS"
-    }
-  }
-    "allowImportingTsExtensions": false
-  },
   "include": [
     "server/**/*",
     "types.ts"
@@ -32,5 +21,10 @@
   "exclude": [
     "node_modules",
     "dist"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
 }
