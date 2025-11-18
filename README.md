@@ -10,6 +10,57 @@ An intelligent tool that uses Gemini AI to extract and parse data from auction h
 - 🔗 **Xero Integration**: Direct upload to Xero as bills/purchases
 - 🖼️ **Image Upload**: Supports various image formats for invoice processing
 
+## Server-side Gemini Proxy
+
+### Why Use Server-side Proxy?
+
+- Keeps the Gemini API key secret (server-only)
+- Avoids build-time vs runtime environment variable issues with Vite
+- More secure architecture with API key never exposed to the browser
+
+### Environment Configuration
+
+Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. This key must NOT be exposed to the browser.
+
+**For Render deployment:**
+1. Go to your Web Service dashboard
+2. Navigate to Environment section
+3. Add environment variable: `GEMINI_API_KEY` with your Gemini API key value
+
+### Local Development
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Create a `.env` file in the root directory with:
+   ```
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+3. Run the server (development mode with ts-node):
+   ```bash
+   npm run dev:server
+   ```
+
+4. In a separate terminal, run the Vite client:
+   ```bash
+   npm run dev
+   ```
+
+5. For production build of the server:
+   ```bash
+   npm run build:server
+   npm run start:server
+   ```
+
+### How It Works
+
+1. The client uploads the invoice image (multipart/form-data with field name "image") to `POST /api/extract-invoice`
+2. The server receives the image, calls Gemini API using the server-side `GEMINI_API_KEY`
+3. Server returns structured JSON invoice data to the client
+
 ## Deployment on Render
 
 ### Gemini Proxy Server (Web Service)
