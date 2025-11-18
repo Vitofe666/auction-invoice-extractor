@@ -1,8 +1,17 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import type { InvoiceData } from "../types";
-import { callWithRetry } from "./retry";
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import { GoogleGenAI, Type } from '@google/genai';
+import type { Request, Response } from 'express';
 
-// FIX: Replaced the long, combined prompt with structured components for the Gemini API.
+const upload = multer({ storage: multer.memoryStorage() });
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+
+// Keep the same instructions/schema as the client expects to ensure consistent outputs
 const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and [...]
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
@@ -49,137 +58,68 @@ The output MUST strictly adhere to the provided JSON schema. Do not generate any
 
 const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
 
-// FIX: Defined a strict JSON schema for the model's response.
+// Minimal schema for server-side validation (you can copy full client schema here if desired)
 const INVOICE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     InvoiceNumber: { type: Type.STRING },
-    InvoiceDate: {
-      type: Type.STRING,
-      description: 'The invoice date in YYYY-MM-DD format.'
-    },
+    InvoiceDate: { type: Type.STRING },
     SupplierName: { type: Type.STRING },
     TotalAmount: { type: Type.NUMBER },
     Currency: { type: Type.STRING },
-    LineItems: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          LineType: {
-            type: Type.STRING,
-            description: 'Type of the line item. Must be one of: "Lot", "Premium", "Surcharge".'
-          },
-          LotNumber: { type: Type.STRING },
-          Description: { type: Type.STRING },
-          Quantity: { type: Type.NUMBER },
-          UnitPrice: { 
-            type: Type.NUMBER,
-            description: 'The base unit price before any VAT/tax.'
-          },
-          TaxType: { 
-            type: Type.STRING, 
-            description: "Set to 'VAT' for items with 20% VAT (surcharges), or null for VAT exempt items (lots and buyers premium)." 
-          },
-          TaxRate: {
-            type: Type.NUMBER,
-            description: "Tax rate: 20 for surcharges with VAT, 0 for VAT exempt lots and buyers premium."
-          },
-          TaxAmount: { 
-            type: Type.NUMBER, 
-            description: "Amount of VAT: UnitPrice × 0.20 for surcharges, 0 for lots and buyers premium." 
-          },
-          VatIncluded: {
-            type: Type.BOOLEAN,
-            description: "Always false for auction houses - VAT is either exempt or added separately."
-          },
-          LineTotal: { 
-            type: Type.NUMBER,
-            description: 'Total amount: UnitPrice + TaxAmount. For VAT exempt items, equals UnitPrice. For VAT items, equals UnitPrice + (UnitPrice × 0.20).'
-          }
-        },
-        required: ['LineType', 'LotNumber', 'Description', 'Quantity', 'UnitPrice', 'TaxType', 'TaxRate', 'TaxAmount', 'VatIncluded', 'LineTotal']
-      }
-    }
+    LineItems: { type: Type.ARRAY },
   },
-  required: ['InvoiceNumber', 'InvoiceDate', 'SupplierName', 'TotalAmount', 'Currency', 'LineItems']
 };
 
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error('GEMINI_API_KEY is not set in the server environment. Set GEMINI_API_KEY to your Gemini API key (server-side only).');
+}
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove the data URL prefix e.g. "data:image/png;base64,"
-      resolve(result.split(',')[1]);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
-  // Get API key from environment variables (defined in vite.config.ts)
-  const apiKey = process.env.VITE_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("VITE_API_KEY environment variable is not set. Please add your Gemini API key to your .env.local file or Render environment variables.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-
+app.post('/api/extract-invoice', upload.single('image'), async (req: Request, res: Response) => {
   try {
-    const base64Image = await fileToBase64(imageFile);
-
-    const imagePart = {
-      inlineData: {
-        mimeType: imageFile.type,
-        data: base64Image,
-      },
-    };
-    
-    const textPart = {
-      text: USER_PROMPT,
-    };
-
-    // FIX: Updated generateContent call to use systemInstruction and responseSchema.
-    // Wrap the API call with retry logic to handle transient 503 errors
-    const maxRetries = parseInt(process.env.VITE_MAX_RETRIES || '5', 10);
-    const response = await callWithRetry(
-      async () => {
-        return await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: { parts: [textPart, imagePart] },
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-            responseMimeType: "application/json",
-            responseSchema: INVOICE_SCHEMA,
-          },
-        });
-      },
-      { 
-        maxRetries,
-        baseDelayMs: 300, 
-        retryableStatusCodes: [503, 429],
-      }
-    );
-    
-    // FIX: Simplified JSON parsing logic as responseSchema ensures format.
-    const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
-    const parsedData = JSON.parse(jsonString);
-
-    return parsedData as InvoiceData;
-
-  } catch (error: any) {
-    console.error("Error calling Gemini API:", error);
-    
-    const attempts = (error?.attempts) || 1;
-    const attemptsInfo = error?.attempts ? ` (after ${error.attempts} attempt(s))` : '';
-    
-    if (error instanceof Error) {
-        throw new Error(`Failed to extract data${attemptsInfo}: ${error.message}`);
+    if (!ai) {
+      console.error('Gemini client not initialized (missing GEMINI_API_KEY).');
+      return res.status(500).json({ error: 'Server misconfiguration: GEMINI_API_KEY not set' });
     }
-    throw new Error(`An unknown error occurred while communicating with the AI${attemptsInfo}.`);
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded. Use field name "image".' });
+    }
+
+    const mimeType = req.file.mimetype;
+    const base64 = req.file.buffer.toString('base64');
+
+    const imagePart = { inlineData: { mimeType, data: base64 } };
+    const textPart = { text: USER_PROMPT };
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [textPart, imagePart] },
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: 'application/json',
+        responseSchema: INVOICE_SCHEMA,
+      },
+    });
+
+    const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
+    const parsed = JSON.parse(jsonString);
+
+    return res.json(parsed);
+  } catch (err: any) {
+    console.error('Error in /api/extract-invoice:', err);
+    const attempts = err?.attempts ?? 1;
+    return res.status(500).json({ error: err?.message ?? 'unknown', attempts });
   }
-};
+});
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`gemini proxy server listening on port ${PORT}`);
+  });
+}
+
+export default app;
