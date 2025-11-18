@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -6,7 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Auction Invoice Extractor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Removed CDN build-time Tailwind script and removed runtime /index.css link.
+         CSS will be imported from index.tsx and included in Vite build output. -->
+
     <style>
       /* For Webkit-based browsers (Chrome, Safari) */
       ::-webkit-scrollbar {
@@ -26,6 +28,7 @@
         background: #718096; /* light-gray */
       }
     </style>
+
   <script type="importmap">
 {
   "imports": {
@@ -36,7 +39,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-900 text-gray-100">
     <div id="root"></div>
