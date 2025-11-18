@@ -144,6 +144,8 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
     };
 
     // FIX: Updated generateContent call to use systemInstruction and responseSchema.
+    // Wrap the API call with retry logic to handle transient 503 errors
+    const maxRetries = parseInt(process.env.VITE_MAX_RETRIES || '5', 10);
     const response = await callWithRetry(
       async () => {
         return await ai.models.generateContent({
@@ -156,6 +158,10 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
           },
         });
       },
+      { 
+        maxRetries, 
+        baseDelayMs: 300, 
+        retryableStatusCodes: [503, 429] 
       {
         maxRetries: parseInt(process.env.VITE_MAX_RETRIES || '5', 10),
         baseDelayMs: 300,
@@ -169,6 +175,16 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
 
     return parsedData as InvoiceData;
 
+  } catch (error: any) {
+    console.error("Error calling Gemini API:", error);
+    
+    // Include retry attempts in error message if available
+    const attemptsInfo = error.attempts ? ` (after ${error.attempts} attempt(s))` : '';
+    
+    if (error instanceof Error) {
+        throw new Error(`Failed to extract data${attemptsInfo}: ${error.message}`);
+    }
+    throw new Error(`An unknown error occurred while communicating with the AI${attemptsInfo}.`);
   } catch (error) {
     const attempts = (error as any)?.attempts || 1;
     console.error(`Error calling Gemini API (attempts: ${attempts}):`, error);
