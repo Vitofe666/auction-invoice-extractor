@@ -8,6 +8,8 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Enable CORS for all origins (adjust as needed for production)
+// TODO: In production, configure specific allowed origins instead of allowing all
+// Example: app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*' }))
 app.use(cors());
 app.use(express.json());
 
