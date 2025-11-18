@@ -107,8 +107,14 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
   }
 });
 
-if (require.main === module) {
+export function startServer() {
   app.listen(PORT, () => console.log(`gemini proxy server listening on port ${PORT}`));
+}
+
+// Auto-start when run directly (works in both ES modules and CommonJS)
+// @ts-ignore - handle both module systems
+if (typeof require !== 'undefined' && require.main === module) {
+  startServer();
 }
 
 export default app;
