@@ -20,16 +20,19 @@
     "@types/node": "^22.14.0"
   }
 }
-// Add these scripts (merge into your existing "scripts" object)
-"dev:server": "ts-node server/geminiProxy.ts",
-"build:server": "tsc -p tsconfig.server.json",
-"start:server": "node ./dist/server/geminiProxy.js"
+{
+  "dev:server": "ts-node server/geminiProxy.ts",
+  "build:server": "tsc -p tsconfig.server.json",
+  "start:server": "node ./dist/server/geminiProxy.js"
+}
 
-// Add these dependencies (merge into your existing "dependencies")
-"express": "^4.18.2",
-"multer": "^1.4.5-lts.1",
-"cors": "^2.8.5",
-"@google/genai": "^1.0.0"
+{
+  "express": "^4.18.2",
+  "multer": "^1.4.5-lts.1",
+  "cors": "^2.8.5",
+  "@google/genai": "^1.0.0"
+}
 
-// Add these devDependencies (merge into your existing "devDependencies")
-"ts-node": "^10.9.1"
+{
+  "ts-node": "^10.9.1"
+}
