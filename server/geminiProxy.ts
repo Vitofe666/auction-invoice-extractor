@@ -119,22 +119,6 @@ if (typeof require !== 'undefined' && require.main === module) {
   startServer();
 }
 
-export default app;
-import express, { Request, Response } from 'express';
-import multer from 'multer';
-import cors from 'cors';
-import { GoogleGenAI } from '@google/genai';
-import type { InvoiceData } from '../types';
-
-const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
-
-// Enable CORS for all origins (adjust as needed for production)
-// TODO: In production, configure specific allowed origins instead of allowing all
-// Example: app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*' }))
-app.use(cors());
-app.use(express.json());
-
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   console.error('GEMINI_API_KEY environment variable is required');
