@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { InvoiceData } from "../types";
+import { callWithRetry } from "./retry";
 
 // FIX: Replaced the long, combined prompt with structured components for the Gemini API.
 const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
@@ -143,15 +144,26 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
     };
 
     // FIX: Updated generateContent call to use systemInstruction and responseSchema.
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [textPart, imagePart] },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: INVOICE_SCHEMA,
+    // Wrap the API call with retry logic to handle transient 503 errors
+    const maxRetries = parseInt(process.env.VITE_MAX_RETRIES || '5', 10);
+    const response = await callWithRetry(
+      async () => {
+        return await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [textPart, imagePart] },
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseSchema: INVOICE_SCHEMA,
+          },
+        });
       },
-    });
+      { 
+        maxRetries, 
+        baseDelayMs: 300, 
+        retryableStatusCodes: [503, 429] 
+      }
+    );
     
     // FIX: Simplified JSON parsing logic as responseSchema ensures format.
     const jsonString = response.text.trim();
@@ -159,11 +171,15 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
 
     return parsedData as InvoiceData;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error calling Gemini API:", error);
+    
+    // Include retry attempts in error message if available
+    const attemptsInfo = error.attempts ? ` (after ${error.attempts} attempt(s))` : '';
+    
     if (error instanceof Error) {
-        throw new Error(`Failed to extract data: ${error.message}`);
+        throw new Error(`Failed to extract data${attemptsInfo}: ${error.message}`);
     }
-    throw new Error("An unknown error occurred while communicating with the AI.");
+    throw new Error(`An unknown error occurred while communicating with the AI${attemptsInfo}.`);
   }
 };
