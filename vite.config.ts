@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_API_KEY),
+        'process.env.ANTHROPIC_API_KEY': JSON.stringify(env.VITE_API_KEY),
         'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || mode),
         'process.env.VITE_BACKEND_URL': JSON.stringify(env.VITE_BACKEND_URL),
         'process.env.VITE_MAX_RETRIES': JSON.stringify(env.VITE_MAX_RETRIES)

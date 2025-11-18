@@ -1,7 +1,7 @@
 import type { InvoiceData } from "../types";
 
 /**
- * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
+ * Client now POSTs the image to the server-side proxy instead of calling Claude directly.
  * Field name: "image" (multipart/form-data)
  */
 export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {

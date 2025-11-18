@@ -1,31 +1,31 @@
 # Auction Invoice Extractor
 
-An intelligent tool that uses Gemini AI to extract and parse data from auction house invoices into structured JSON format, with direct integration to Xero accounting software.
+An intelligent tool that uses Claude AI to extract and parse data from auction house invoices into structured JSON format, with direct integration to Xero accounting software.
 
 ## Features
 
-- 🤖 **AI-Powered Extraction**: Uses Google Gemini to intelligently parse invoice images
+- 🤖 **AI-Powered Extraction**: Uses Anthropic Claude to intelligently parse invoice images
 - 📊 **Structured JSON Output**: Converts unstructured invoice data into clean, structured format
 - 💰 **VAT Handling**: Automatically detects and calculates VAT/tax amounts
 - 🔗 **Xero Integration**: Direct upload to Xero as bills/purchases
 - 🖼️ **Image Upload**: Supports various image formats for invoice processing
 
-## Server-side Gemini Proxy
+## Server-side Claude Proxy
 
 ### Why Use Server-side Proxy?
 
-- Keeps the Gemini API key secret (server-only)
+- Keeps the Claude API key secret (server-only)
 - Avoids build-time vs runtime environment variable issues with Vite
 - More secure architecture with API key never exposed to the browser
 
 ### Environment Configuration
 
-Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. This key must NOT be exposed to the browser.
+Set `ANTHROPIC_API_KEY` in your Render (or server) runtime environment variables. This key must NOT be exposed to the browser.
 
 **For Render deployment:**
 1. Go to your Web Service dashboard
 2. Navigate to Environment section
-3. Add environment variable: `GEMINI_API_KEY` with your Gemini API key value
+3. Add environment variable: `ANTHROPIC_API_KEY` with your Anthropic API key value
 
 ### Local Development
 
@@ -36,7 +36,7 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 
 2. Create a `.env` file in the root directory with:
    ```
-   GEMINI_API_KEY=your_gemini_api_key_here
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
    ```
 
 3. Run the server (development mode with ts-node):
@@ -58,19 +58,19 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 ### How It Works
 
 1. The client uploads the invoice image (multipart/form-data with field name "image") to `POST /api/extract-invoice`
-2. The server receives the image, calls Gemini API using the server-side `GEMINI_API_KEY`
+2. The server receives the image, calls Claude API using the server-side `ANTHROPIC_API_KEY`
 3. Server returns structured JSON invoice data to the client
 
 ## Deployment on Render
 
-### Gemini Proxy Server (Web Service)
+### Claude Proxy Server (Web Service)
 1. Create a new **Web Service** on Render
 2. Connect your GitHub repository
 3. Configure:
    - **Build Command**: `npm install && npm run build:server`
    - **Start Command**: `npm run start:server`
    - **Environment Variables**:
-     - `GEMINI_API_KEY`: Your Google Gemini API key (keep this secret, server-side only)
+     - `ANTHROPIC_API_KEY`: Your Anthropic Claude API key (keep this secret, server-side only)
      - `PORT`: 3001 (or as required by Render)
      - `NODE_ENV`: production
 
@@ -98,10 +98,10 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 
 ## Local Development
 
-### Server-side Gemini Proxy
+### Server-side Claude Proxy
 
 **Why use a server-side proxy?**
-- Keeps the Gemini API key secret (server-only, never exposed to the browser)
+- Keeps the Claude API key secret (server-only, never exposed to the browser)
 - Avoids build-time vs runtime environment variable issues with Vite
 - Better security and control over API usage
 
@@ -114,11 +114,11 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 
 2. Set environment variable:
    ```bash
-   export GEMINI_API_KEY=your_api_key_here
-   # Or add to .env file: GEMINI_API_KEY=your_api_key_here
+   export ANTHROPIC_API_KEY=your_api_key_here
+   # Or add to .env file: ANTHROPIC_API_KEY=your_api_key_here
    ```
 
-3. Run the Gemini proxy server (development):
+3. Run the Claude proxy server (development):
    ```bash
    npm run dev:server
    ```
@@ -131,7 +131,7 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 
 **How it works:**
 - The client uploads the invoice image (multipart/form-data with field name "image") to POST `/api/extract-invoice`
-- The server receives the image, calls Google Gemini API using the server-side GEMINI_API_KEY
+- The server receives the image, calls Anthropic Claude API using the server-side ANTHROPIC_API_KEY
 - The server returns structured JSON invoice data to the client
 - The API key never leaves the server and is not exposed to the browser
 
@@ -147,6 +147,6 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
 
 - **Frontend**: React, TypeScript, Vite
 - **Backend**: Node.js, Express
-- **AI**: Google Gemini API
+- **AI**: Anthropic Claude API
 - **Accounting**: Xero API
 - **Deployment**: Render

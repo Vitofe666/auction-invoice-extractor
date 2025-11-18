@@ -81,7 +81,7 @@ app.use(express.static(publicPath));
 /**
  * Placeholder function to simulate invoice processing
  * 
- * TODO: Replace this with actual invoice extraction logic using Gemini API or other service
+ * TODO: Replace this with actual invoice extraction logic using Claude API or other service
  * 
  * @param imageBuffer - The uploaded image buffer
  * @param mimeType - The MIME type of the uploaded image

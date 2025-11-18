@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
-import { GoogleGenAI, Type } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 import type { Request, Response } from 'express';
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -55,33 +55,20 @@ EXTRACTION PROCESS:
 
 The output MUST strictly adhere to the provided JSON schema. Do not generate any conversational text, explanations, or Markdown formatting.`;
 
-const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
+const USER_PROMPT = "Extract the structured data from the following auction house invoice. Return ONLY valid JSON matching the schema, with no markdown formatting or additional text.";
 
-// Minimal schema for parity with client (expand/copy full schema from client if you want stricter validation)
-const INVOICE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    InvoiceNumber: { type: Type.STRING },
-    InvoiceDate: { type: Type.STRING },
-    SupplierName: { type: Type.STRING },
-    TotalAmount: { type: Type.NUMBER },
-    Currency: { type: Type.STRING },
-    LineItems: { type: Type.ARRAY },
-  },
-};
-
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.ANTHROPIC_API_KEY;
 if (!apiKey) {
-  console.error('GEMINI_API_KEY is not set in the server environment. Set GEMINI_API_KEY to your Gemini API key (server-side only).');
+  console.error('ANTHROPIC_API_KEY is not set in the server environment. Set ANTHROPIC_API_KEY to your Claude API key (server-side only).');
 }
 
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
 app.post('/api/extract-invoice', upload.single('image'), async (req: Request, res: Response) => {
   try {
-    if (!ai) {
-      console.error('Gemini client not initialized (missing GEMINI_API_KEY).');
-      return res.status(500).json({ error: 'Server misconfiguration: GEMINI_API_KEY not set' });
+    if (!anthropic) {
+      console.error('Claude client not initialized (missing ANTHROPIC_API_KEY).');
+      return res.status(500).json({ error: 'Server misconfiguration: ANTHROPIC_API_KEY not set' });
     }
 
     if (!req.file) {
@@ -91,33 +78,77 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const mimeType = req.file.mimetype;
     const base64 = req.file.buffer.toString('base64');
 
-    const imagePart = { inlineData: { mimeType, data: base64 } };
-    const textPart = { text: USER_PROMPT };
+    // Map common mime types to Claude's supported formats
+    let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      mediaType = 'image/jpeg';
+    } else if (mimeType === 'image/png') {
+      mediaType = 'image/png';
+    } else if (mimeType === 'image/gif') {
+      mediaType = 'image/gif';
+    } else if (mimeType === 'image/webp') {
+      mediaType = 'image/webp';
+    } else {
+      return res.status(400).json({ error: 'Unsupported image format. Please use JPEG, PNG, GIF, or WebP.' });
+    }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [textPart, imagePart] },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: INVOICE_SCHEMA,
-      },
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 4096,
+      system: SYSTEM_INSTRUCTION,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64,
+              },
+            },
+            {
+              type: 'text',
+              text: USER_PROMPT,
+            },
+          ],
+        },
+      ],
     });
 
-    const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
-    const parsed = JSON.parse(jsonString);
+    const content = response.content[0];
+    if (content.type !== 'text') {
+      console.error('Unexpected response type from Claude API:', content.type);
+      return res.status(500).json({ 
+        error: 'Unexpected response type from Claude API',
+        type: content.type
+      });
+    }
 
+    const jsonString = content.text.trim();
+    if (!jsonString) {
+      console.error('Empty response from Claude API:', response);
+      return res.status(500).json({ 
+        error: 'Empty response from Claude API',
+        response: JSON.stringify(response)
+      });
+    }
+
+    const parsed = JSON.parse(jsonString);
     return res.json(parsed);
   } catch (err: any) {
     console.error('Error in /api/extract-invoice:', err);
-    const attempts = err?.attempts ?? 1;
-    return res.status(500).json({ error: err?.message ?? 'unknown', attempts });
+    return res.status(500).json({ 
+      error: err?.message ?? 'unknown', 
+      details: err?.toString()
+    });
   }
 });
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`gemini proxy server listening on port ${PORT}`);
+    console.log(`Claude proxy server listening on port ${PORT}`);
   });
 }
 
