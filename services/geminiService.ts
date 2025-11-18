@@ -3,7 +3,7 @@ import type { InvoiceData } from "../types";
 import { callWithRetry } from "./retry";
 
 // FIX: Replaced the long, combined prompt with structured components for the Gemini API.
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and [...]
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
@@ -121,7 +121,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
   // Get API key from environment variables (defined in vite.config.ts)
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.VITE_API_KEY;
   
   if (!apiKey) {
     throw new Error("VITE_API_KEY environment variable is not set. Please add your Gemini API key to your .env.local file or Render environment variables.");
@@ -159,18 +159,14 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
         });
       },
       { 
-        maxRetries, 
+        maxRetries,
         baseDelayMs: 300, 
-        retryableStatusCodes: [503, 429] }
-      {
-        maxRetries: parseInt(process.env.VITE_MAX_RETRIES || '5', 10),
-        baseDelayMs: 300,
-        retryableStatusCodes: [503, 429]
+        retryableStatusCodes: [503, 429],
       }
     );
     
     // FIX: Simplified JSON parsing logic as responseSchema ensures format.
-    const jsonString = response.text.trim();
+    const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
     const parsedData = JSON.parse(jsonString);
 
     return parsedData as InvoiceData;
@@ -178,19 +174,12 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
   } catch (error: any) {
     console.error("Error calling Gemini API:", error);
     
-    // Include retry attempts in error message if available
-    const attemptsInfo = error.attempts ? ` (after ${error.attempts} attempt(s))` : '';
+    const attempts = (error?.attempts) || 1;
+    const attemptsInfo = error?.attempts ? ` (after ${error.attempts} attempt(s))` : '';
     
     if (error instanceof Error) {
         throw new Error(`Failed to extract data${attemptsInfo}: ${error.message}`);
     }
     throw new Error(`An unknown error occurred while communicating with the AI${attemptsInfo}.`);
-  } catch (error) {
-    const attempts = (error as any)?.attempts || 1;
-    console.error(`Error calling Gemini API (attempts: ${attempts}):`, error);
-    if (error instanceof Error) {
-        throw new Error(`Failed to extract data after ${attempts} attempt(s): ${error.message}`);
-    }
-    throw new Error(`An unknown error occurred while communicating with the AI after ${attempts} attempt(s).`);
   }
 };
