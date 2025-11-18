@@ -129,7 +129,24 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
       });
     }
     
-    const parsed = JSON.parse(jsonString);
+    // Parse JSON, handling potential markdown code blocks
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (parseError) {
+      // Try to extract JSON from markdown code blocks (```json ... ```)
+      const jsonMatch = jsonString.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          parsed = JSON.parse(jsonMatch[1].trim());
+        } catch {
+          throw new Error('Failed to parse JSON response from Claude API');
+        }
+      } else {
+        throw new Error('Failed to parse JSON response from Claude API');
+      }
+    }
+    
     return res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/extract-invoice:', error);
