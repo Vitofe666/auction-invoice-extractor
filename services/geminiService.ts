@@ -162,6 +162,10 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
         maxRetries, 
         baseDelayMs: 300, 
         retryableStatusCodes: [503, 429] 
+      {
+        maxRetries: parseInt(process.env.VITE_MAX_RETRIES || '5', 10),
+        baseDelayMs: 300,
+        retryableStatusCodes: [503, 429]
       }
     );
     
@@ -181,5 +185,12 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
         throw new Error(`Failed to extract data${attemptsInfo}: ${error.message}`);
     }
     throw new Error(`An unknown error occurred while communicating with the AI${attemptsInfo}.`);
+  } catch (error) {
+    const attempts = (error as any)?.attempts || 1;
+    console.error(`Error calling Gemini API (attempts: ${attempts}):`, error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to extract data after ${attempts} attempt(s): ${error.message}`);
+    }
+    throw new Error(`An unknown error occurred while communicating with the AI after ${attempts} attempt(s).`);
   }
 };

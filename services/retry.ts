@@ -32,6 +32,9 @@ function isTransientError(err: any, extraRetryable: number[]) {
   if (err?.code && transientStrings.includes(String(err.code))) return true;
 
   // Fallback: inspect message for common transient hints
+  const transientStrings = ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EAI_AGAIN'];
+  if (err?.code && transientStrings.includes(String(err.code))) return true;
+
   const msg = String(err?.message || '').toLowerCase();
   if (msg.includes('overloaded') || msg.includes('unavailable') || msg.includes('rate limit')) return true;
 
@@ -80,5 +83,29 @@ export async function callWithRetry<T>(fn: () => Promise<T>, options?: RetryOpti
   }
 
   // Should never get here
+      const retryAfterHeader = err?.response?.headers?.['retry-after'] || err?.response?.headers?.['Retry-After'] || err?.headers?.['retry-after'] || err?.headers?.['Retry-After'];
+      const shouldRetry = isTransientError(err, opts.retryableStatusCodes);
+
+      if (!shouldRetry || isLastAttempt) {
+        try { err.attempts = attempt + 1; } catch (_) {}
+        throw err;
+      }
+
+      let retryAfterMs = 0;
+      if (retryAfterHeader) {
+        const parsed = parseFloat(String(retryAfterHeader));
+        if (!isNaN(parsed)) retryAfterMs = parsed * 1000;
+      }
+
+      const exponential = opts.baseDelayMs * Math.pow(2, attempt);
+      const jitter = Math.random() * exponential;
+      const waitMs = Math.max(exponential + jitter, retryAfterMs || 0);
+
+      console.warn(`Transient error encountered; retrying attempt ${attempt + 1}/${opts.maxRetries} after ${Math.round(waitMs)}ms.`, err?.message || err);
+
+      await delay(waitMs);
+    }
+  }
+
   throw new Error('Exceeded retry attempts');
 }
