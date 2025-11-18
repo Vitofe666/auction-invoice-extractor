@@ -1,12 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "CommonJS",
+    "module": "ES2022",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "outDir": "./dist/server",
+    "outDir": "./dist",
     "rootDir": "./",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "noEmit": false,

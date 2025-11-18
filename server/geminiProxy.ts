@@ -414,9 +414,15 @@ export function startServer() {
   });
 }
 
-// Auto-start when run directly (works in both ES modules and CommonJS)
-// @ts-ignore - handle both module systems
-if (typeof require !== 'undefined' && require.main === module) {
+// Auto-start when run directly
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Check if this module is being run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
   startServer();
 }
 
