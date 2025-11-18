@@ -6,6 +6,8 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": ".",
+    "outDir": "./dist/server",
+    "rootDir": "./",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -21,4 +23,14 @@
       "module": "CommonJS"
     }
   }
+    "allowImportingTsExtensions": false
+  },
+  "include": [
+    "server/**/*",
+    "types.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
