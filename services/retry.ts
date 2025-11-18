@@ -1,109 +1,60 @@
-export type RetryOptions = {
-  maxRetries?: number;        // total retry attempts (default 5)
-  baseDelayMs?: number;       // base delay in ms for backoff (default 300)
-  retryableStatusCodes?: number[]; // additional codes to treat as retryable
-};
-
-const DEFAULT_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 5,
-  baseDelayMs: 300,
-  retryableStatusCodes: []
-};
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// services/retry.ts
+export interface RetryOptions {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  retryableStatusCodes?: number[];
 }
 
-function isTransientError(err: any, extraRetryable: number[]) {
-  const status =
-    err?.status ||
-    err?.code ||
-    err?.response?.status ||
-    err?.response?.statusCode ||
-    (typeof err?.status === 'string' ? parseInt(err.status, 10) : undefined);
+export async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  const {
+    maxRetries = 5,
+    baseDelayMs = 300,
+    retryableStatusCodes = [502, 503, 504, 429],
+  } = options;
 
-  // Treat 429 (rate limit) and 503 (service unavailable) as transient.
-  const transientCodes = [429, 503, ...extraRetryable];
-
-  if (status && transientCodes.includes(Number(status))) return true;
-
-  // Some client libs throw network errors by code string
+  // Strings that often indicate transient network errors (declared once)
   const transientStrings = ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EAI_AGAIN'];
-  if (err?.code && transientStrings.includes(String(err.code))) return true;
 
-  // Fallback: inspect message for common transient hints
-  const transientStrings = ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EAI_AGAIN'];
-  if (err?.code && transientStrings.includes(String(err.code))) return true;
+  const isTransientError = (err: any, status?: number) => {
+    const code = err?.code;
+    const message: string = String(err?.message ?? '');
 
-  const msg = String(err?.message || '').toLowerCase();
-  if (msg.includes('overloaded') || msg.includes('unavailable') || msg.includes('rate limit')) return true;
+    const byCode = code && transientStrings.includes(String(code));
+    const byStatus = typeof status === 'number' && retryableStatusCodes.includes(status);
+    const byMessage = /timeout|timed out|ECONNRESET|ETIMEDOUT|ECONNABORTED|EAI_AGAIN/i.test(message);
 
-  return false;
-}
+    return Boolean(byCode || byStatus || byMessage);
+  };
 
-/**
- * callWithRetry - retry wrapper with exponential backoff + jitter
- * fn - async function that performs the request
- */
-export async function callWithRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
-  const opts = { ...DEFAULT_OPTIONS, ...(options || {}) };
-  for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err: any) {
-      const isLastAttempt = attempt === opts.maxRetries;
-      const retryAfterHeader = err?.response?.headers?.['retry-after'] || err?.response?.headers?.['Retry-After'];
-      const shouldRetry = isTransientError(err, opts.retryableStatusCodes);
+      // Try to extract HTTP/status information commonly found on errors
+      const status = err?.response?.status ?? err?.statusCode ?? err?.status;
+      const shouldRetry = isTransientError(err, status);
 
-      if (!shouldRetry || isLastAttempt) {
-        // Re-throw original error with attempt info
-        err.attempts = attempt + 1;
-        throw err;
-      }
-
-      // Determine wait time: prefer Retry-After if set
-      let retryAfterMs = 0;
-      if (retryAfterHeader) {
-        const parsed = parseFloat(String(retryAfterHeader));
-        if (!isNaN(parsed)) {
-          retryAfterMs = parsed > 10 ? parsed * 1000 : parsed * 1000; // assume seconds
+      // If we've exhausted attempts or the error isn't transient/retryable, rethrow with attempts info
+      if (attempt === maxRetries || !shouldRetry) {
+        // Attach attempts to the error for better diagnostics
+        try {
+          (err as any).attempts = attempt;
+        } catch {
+          // ignore if non-writable
         }
-      }
-
-      const exponential = opts.baseDelayMs * Math.pow(2, attempt); // base * 2^attempt
-      const jitter = Math.random() * exponential;
-      const waitMs = Math.max(exponential + jitter, retryAfterMs || 0);
-
-      // Small console log for debugging; remove or hook into logger as needed.
-      console.warn(`Transient error encountered; retrying attempt ${attempt + 1}/${opts.maxRetries} after ${Math.round(waitMs)}ms. Error:`, err?.message || err);
-
-      await delay(waitMs);
-      // loop and retry
-    }
-  }
-
-  // Should never get here
-      const retryAfterHeader = err?.response?.headers?.['retry-after'] || err?.response?.headers?.['Retry-After'] || err?.headers?.['retry-after'] || err?.headers?.['Retry-After'];
-      const shouldRetry = isTransientError(err, opts.retryableStatusCodes);
-
-      if (!shouldRetry || isLastAttempt) {
-        try { err.attempts = attempt + 1; } catch (_) {}
         throw err;
       }
 
-      let retryAfterMs = 0;
-      if (retryAfterHeader) {
-        const parsed = parseFloat(String(retryAfterHeader));
-        if (!isNaN(parsed)) retryAfterMs = parsed * 1000;
-      }
+      // Exponential backoff with jitter
+      const exponential = Math.pow(2, attempt - 1);
+      const jitter = Math.floor(Math.random() * baseDelayMs);
+      const waitMs = exponential * baseDelayMs + jitter;
 
-      const exponential = opts.baseDelayMs * Math.pow(2, attempt);
-      const jitter = Math.random() * exponential;
-      const waitMs = Math.max(exponential + jitter, retryAfterMs || 0);
-
-      console.warn(`Transient error encountered; retrying attempt ${attempt + 1}/${opts.maxRetries} after ${Math.round(waitMs)}ms.`, err?.message || err);
-
-      await delay(waitMs);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      // continue to next attempt
     }
   }
 
