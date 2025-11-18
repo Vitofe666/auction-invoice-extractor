@@ -1,19 +1,18 @@
 # 🚀 Deployment Troubleshooting Guide
 
 ## ⚠️ CRITICAL SECURITY ISSUE
-**Your Google Gemini API key was exposed in the repository!**
+**Your Anthropic Claude API key was exposed in the repository!**
 
 ### Immediate Actions Required:
 
 1. **Revoke the exposed API key immediately:**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   - Find the key: `AIzaSyCHXMJKxw6eS-u1hfgGVB9wzBfQn3bAjzI`
-   - Delete or regenerate it
+   - Go to [Anthropic Console](https://console.anthropic.com/)
+   - Find and delete the exposed API key
+   - Generate a new API key
 
 2. **Generate a new API key:**
-   - Create a new API key in Google Cloud Console
-   - Restrict it to the Generative AI API only
-   - Add domain restrictions if possible
+   - Create a new API key in Anthropic Console
+   - Store it securely in environment variables only
 
 ## 🔧 Fixed Issues
 
@@ -28,7 +27,6 @@
 #### Frontend Deployment:
 1. **Environment Variables in Render Dashboard:**
    ```
-   VITE_API_KEY=your_new_google_gemini_api_key
    VITE_BACKEND_URL=https://vitofe666-auction-invoice-backend.onrender.com
    NODE_ENV=production
    ```
@@ -36,6 +34,18 @@
 2. **Build Settings:**
    - Build Command: `npm install && npm run build`
    - Publish Directory: `dist`
+
+#### Claude Proxy Server Deployment:
+1. **Environment Variables in Render Dashboard:**
+   ```
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   PORT=3001
+   NODE_ENV=production
+   ```
+
+2. **Build Settings:**
+   - Build Command: `npm install && npm run build:server`
+   - Start Command: `npm run start:server`
 
 #### Backend Deployment:
 1. **Environment Variables in Render Dashboard:**
@@ -54,7 +64,7 @@
 
 ## 🐛 Common Issues & Solutions
 
-### Issue 1: "VITE_API_KEY environment variable is not set"
+### Issue 1: "ANTHROPIC_API_KEY environment variable is not set"
 **Solution:** Set the API key in Render's environment variables dashboard (not in code)
 
 ### Issue 2: Frontend can't connect to backend
@@ -65,6 +75,9 @@
 
 ### Issue 4: Build fails with TypeScript errors
 **Solution:** Run `npm run build` locally first to identify issues
+
+### Issue 5: Claude API returns error
+**Solution:** Verify ANTHROPIC_API_KEY is valid and has sufficient credits
 
 ## ✅ Testing Checklist
 
@@ -87,12 +100,18 @@
 # Check if frontend builds
 npm run build
 
+# Check if server builds
+npm run build:server
+
+# Test server locally (requires ANTHROPIC_API_KEY in .env)
+npm run dev:server
+
 # Test backend locally
 cd backend && node app.js
 
 # Check environment variables in Render logs
 console.log('Environment check:', {
-  hasApiKey: !!process.env.API_KEY,
+  hasApiKey: !!process.env.ANTHROPIC_API_KEY,
   hasBackendUrl: !!process.env.VITE_BACKEND_URL,
   nodeEnv: process.env.NODE_ENV
 });
@@ -103,8 +122,8 @@ console.log('Environment check:', {
 1. **Never commit API keys** to version control
 2. **Use environment variables** for all sensitive data
 3. **Rotate API keys** regularly
-4. **Set up API key restrictions** in Google Cloud Console
-5. **Monitor API usage** for suspicious activity
+4. **Monitor API usage** for suspicious activity in Anthropic Console
+5. **Use server-side proxy** to keep API keys secure (never expose to frontend)
 
 ## 📞 Support
 

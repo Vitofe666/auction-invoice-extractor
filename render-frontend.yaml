@@ -5,8 +5,6 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
-      - key: VITE_API_KEY
-        sync: false  # Set this manually in Render dashboard for security
       - key: VITE_BACKEND_URL
         value: https://auction-invoice-extractor-1.onrender.com
       - key: NODE_ENV
