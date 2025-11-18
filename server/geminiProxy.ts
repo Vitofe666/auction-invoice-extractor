@@ -97,14 +97,16 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
       },
     });
 
-    const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
-    const parsed = JSON.parse(jsonString);
-    return res.json(parsed);
-  } catch (err: any) {
-    console.error('Error in /api/extract-invoice:', err);
-    const attempts = err?.attempts ?? 1;
-    return res.status(500).json({ error: err?.message ?? 'unknown', attempts });
-  }
+    const jsonString = (response as any).text?.trim();
+if (!jsonString) {
+  console.error('Empty response from Gemini API:', response);
+  return res.status(500).json({ 
+    error: 'Empty response from Gemini API',
+    response: JSON.stringify(response)
+  });
+}
+const parsed = JSON.parse(jsonString);
+return res.json(parsed);
 });
 
 export function startServer() {
