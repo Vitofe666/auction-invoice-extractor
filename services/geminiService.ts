@@ -161,7 +161,7 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
       { 
         maxRetries, 
         baseDelayMs: 300, 
-        retryableStatusCodes: [503, 429] 
+        retryableStatusCodes: [503, 429] }
       {
         maxRetries: parseInt(process.env.VITE_MAX_RETRIES || '5', 10),
         baseDelayMs: 300,
