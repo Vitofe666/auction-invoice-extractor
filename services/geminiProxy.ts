@@ -11,13 +11,12 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Keep the same instructions/schema as the client expects to ensure consistent outputs
 const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and [...]
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
 1. **HAMMER PRICE (VAT EXEMPT)**:
-   - LineType: "Lot" 
+   - LineType: "Lot"
    - Description contains: "hammer price", "Hammer Price", "lot price", or is just the item description
    - TaxType: null
    - TaxRate: 0
@@ -58,7 +57,7 @@ The output MUST strictly adhere to the provided JSON schema. Do not generate any
 
 const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
 
-// Minimal schema for server-side validation (you can copy full client schema here if desired)
+// Minimal schema for parity with client (expand/copy full schema from client if you want stricter validation)
 const INVOICE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
