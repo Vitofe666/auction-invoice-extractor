@@ -1,5 +1,13 @@
 import type { InvoiceData } from "../types";
 
+const normalizeBaseUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+};
+
+const baseUrl = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
+const apiEndpoint = baseUrl ? `${baseUrl}/api/extract-invoice` : "/api/extract-invoice";
+
 /**
  * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
  * Field name: "image" (multipart/form-data)
@@ -8,7 +16,7 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
   const form = new FormData();
   form.append("image", imageFile);
 
-  const res = await fetch("/api/extract-invoice", {
+  const res = await fetch(apiEndpoint, {
     method: "POST",
     body: form,
   });
