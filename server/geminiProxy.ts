@@ -25,7 +25,8 @@ if (!process.env.GEMINI_API_KEY) {
 }
 console.log('===================================\n');
 
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and extract structured data following specific VAT rules.
+// FIX: Replaced the long, combined prompt with structured components for the Gemini API.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
