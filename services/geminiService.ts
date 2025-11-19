@@ -4,11 +4,14 @@ import type { InvoiceData } from "../types";
  * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
  * Field name: "image" (multipart/form-data)
  */
-export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
+export const extractInvoiceData = async (
+  imageFile: File,
+  endpoint: string = "/api/extract-invoice"
+): Promise<InvoiceData> => {
   const form = new FormData();
   form.append("image", imageFile);
 
-  const res = await fetch("/api/extract-invoice", {
+  const res = await fetch(endpoint, {
     method: "POST",
     body: form,
   });
