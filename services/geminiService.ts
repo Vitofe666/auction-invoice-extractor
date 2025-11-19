@@ -13,10 +13,14 @@ const apiEndpoint = baseUrl ? `${baseUrl}/api/extract-invoice` : "/api/extract-i
  * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
  * Field name: "image" (multipart/form-data)
  */
-export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
+export const extractInvoiceData = async (
+  imageFile: File,
+  endpoint: string = "/api/extract-invoice"
+): Promise<InvoiceData> => {
   const form = new FormData();
   form.append("image", imageFile);
 
+  const res = await fetch(endpoint, {
   const res = await fetch(apiEndpoint, {
     method: "POST",
     body: form,
