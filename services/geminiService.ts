@@ -1,5 +1,6 @@
 
 import type { InvoiceData } from "../types";
+import { normalizeInvoiceData } from "./normalizeInvoiceData";
 
 const normalizeBaseUrl = (url: string | undefined): string => {
   if (!url) return "";
@@ -18,14 +19,12 @@ const apiEndpoint = baseUrl ? `${baseUrl}/api/extract-invoice` : "/api/extract-i
  */
 export const extractInvoiceData = async (
   imageFile: File,
-  endpoint?: string
+  endpoint: string = "/api/extract-invoice"
 ): Promise<InvoiceData> => {
   const form = new FormData();
   form.append("image", imageFile);
 
-  const endpointToUse = endpoint ?? apiEndpoint;
-
-  const res = await fetch(endpointToUse, {
+  const res = await fetch(endpoint, {
     method: "POST",
     body: form,
   });
@@ -65,5 +64,5 @@ export const extractInvoiceData = async (
     throw new Error(`Server error ${res.status}${bodyMsg}`);
   }
 
-  return parsed as InvoiceData;
+  return normalizeInvoiceData(parsed as Partial<InvoiceData>);
 };
