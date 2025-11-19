@@ -1,5 +1,63 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { InvoiceData } from "../types";
+import { normalizeInvoiceData } from "./normalizeInvoiceData";
+
+/**
+ * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
+ * Field name: "image" (multipart/form-data)
+ *
+ * @param imageFile - image File to send
+ * @param endpoint - optional override for the endpoint (defaults to configured apiEndpoint)
+ */
+export const extractInvoiceData = async (
+  imageFile: File,
+  endpoint: string = "/api/extract-invoice"
+): Promise<InvoiceData> => {
+  const form = new FormData();
+  form.append("image", imageFile);
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    body: form,
+  });
+
+  // Read raw body once to avoid "Unexpected end of JSON input"
+  const raw = await res.text();
+
+  // If the body is empty
+  if (!raw) {
+    if (!res.ok) {
+      throw new Error(`Server error ${res.status}: ${res.statusText || "empty response"}`);
+    }
+    throw new Error("Empty response from server");
+  }
+
+  // Try to parse JSON and give a helpful error if it fails
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid JSON response from server: ${msg}. Raw response: ${raw}`);
+  }
+
+  if (!res.ok) {
+    // If parsed is an object with message or error, include it in the thrown error
+    let bodyMsg = "";
+    try {
+      if (parsed && typeof parsed === "object") {
+        const p = parsed as Record<string, unknown>;
+        if (typeof p.message === "string") bodyMsg = `: ${p.message}`;
+        else if (typeof p.error === "string") bodyMsg = `: ${p.error}`;
+      }
+    } catch {
+      // ignore parsing for error message
+    }
+    throw new Error(`Server error ${res.status}${bodyMsg}`);
+  }
+
+  return normalizeInvoiceData(parsed as Partial<InvoiceData>);
+};
 
 // FIX: Replaced the long, combined prompt with structured components for the Gemini API.
 const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
@@ -47,123 +105,3 @@ EXTRACTION PROCESS:
 The output MUST strictly adhere to the provided JSON schema. Do not generate any conversational text, explanations, or Markdown formatting.`;
 
 const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
-
-// FIX: Defined a strict JSON schema for the model's response.
-const INVOICE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    InvoiceNumber: { type: Type.STRING },
-    InvoiceDate: {
-      type: Type.STRING,
-      description: 'The invoice date in YYYY-MM-DD format.'
-    },
-    SupplierName: { type: Type.STRING },
-    TotalAmount: { type: Type.NUMBER },
-    Currency: { type: Type.STRING },
-    LineItems: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          LineType: {
-            type: Type.STRING,
-            description: 'Type of the line item. Must be one of: "Lot", "Premium", "Surcharge".'
-          },
-          LotNumber: { type: Type.STRING },
-          Description: { type: Type.STRING },
-          Quantity: { type: Type.NUMBER },
-          UnitPrice: { 
-            type: Type.NUMBER,
-            description: 'The base unit price before any VAT/tax.'
-          },
-          TaxType: { 
-            type: Type.STRING, 
-            description: "Set to 'VAT' for items with 20% VAT (surcharges), or null for VAT exempt items (lots and buyers premium)." 
-          },
-          TaxRate: {
-            type: Type.NUMBER,
-            description: "Tax rate: 20 for surcharges with VAT, 0 for VAT exempt lots and buyers premium."
-          },
-          TaxAmount: { 
-            type: Type.NUMBER, 
-            description: "Amount of VAT: UnitPrice × 0.20 for surcharges, 0 for lots and buyers premium." 
-          },
-          VatIncluded: {
-            type: Type.BOOLEAN,
-            description: "Always false for auction houses - VAT is either exempt or added separately."
-          },
-          LineTotal: { 
-            type: Type.NUMBER,
-            description: 'Total amount: UnitPrice + TaxAmount. For VAT exempt items, equals UnitPrice. For VAT items, equals UnitPrice + (UnitPrice × 0.20).'
-          }
-        },
-        required: ['LineType', 'LotNumber', 'Description', 'Quantity', 'UnitPrice', 'TaxType', 'TaxRate', 'TaxAmount', 'VatIncluded', 'LineTotal']
-      }
-    }
-  },
-  required: ['InvoiceNumber', 'InvoiceDate', 'SupplierName', 'TotalAmount', 'Currency', 'LineItems']
-};
-
-
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove the data URL prefix e.g. "data:image/png;base64,"
-      resolve(result.split(',')[1]);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
-
-export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
-  // Get API key from environment variables (defined in vite.config.ts)
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("VITE_API_KEY environment variable is not set. Please add your Gemini API key to your .env.local file or Render environment variables.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-
-  try {
-    const base64Image = await fileToBase64(imageFile);
-
-    const imagePart = {
-      inlineData: {
-        mimeType: imageFile.type,
-        data: base64Image,
-      },
-    };
-    
-    const textPart = {
-      text: USER_PROMPT,
-    };
-
-    // FIX: Updated generateContent call to use systemInstruction and responseSchema.
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [textPart, imagePart] },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: INVOICE_SCHEMA,
-      },
-    });
-    
-    // FIX: Simplified JSON parsing logic as responseSchema ensures format.
-    const jsonString = response.text.trim();
-    const parsedData = JSON.parse(jsonString);
-
-    return parsedData as InvoiceData;
-
-  } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    if (error instanceof Error) {
-        throw new Error(`Failed to extract data: ${error.message}`);
-    }
-    throw new Error("An unknown error occurred while communicating with the AI.");
-  }
-};
