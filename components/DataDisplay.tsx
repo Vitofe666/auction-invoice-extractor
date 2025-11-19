@@ -9,7 +9,21 @@ interface DataDisplayProps {
 const DataDisplay: React.FC<DataDisplayProps> = ({ data }) => {
   const formatCurrency = (amount: number | null | undefined, currency: string) => {
     if (amount === null || amount === undefined) return 'N/A';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount);
+
+    const normalizedCurrency =
+      typeof currency === 'string' && currency.trim().length === 3
+        ? currency.trim().toUpperCase()
+        : 'USD';
+
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: normalizedCurrency,
+      }).format(amount);
+    } catch (_err) {
+      const safeAmount = Number.isFinite(amount) ? amount : Number(amount) || 0;
+      return `${normalizedCurrency} ${safeAmount.toFixed(2)}`;
+    }
   };
 
   return (

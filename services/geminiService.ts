@@ -1,14 +1,18 @@
 import type { InvoiceData } from "../types";
+import { normalizeInvoiceData } from "./normalizeInvoiceData";
 
 /**
  * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
  * Field name: "image" (multipart/form-data)
  */
-export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> => {
+export const extractInvoiceData = async (
+  imageFile: File,
+  endpoint: string = "/api/extract-invoice"
+): Promise<InvoiceData> => {
   const form = new FormData();
   form.append("image", imageFile);
 
-  const res = await fetch("/api/extract-invoice", {
+  const res = await fetch(endpoint, {
     method: "POST",
     body: form,
   });
@@ -39,5 +43,5 @@ export const extractInvoiceData = async (imageFile: File): Promise<InvoiceData> 
     throw new Error(`Server error ${res.status}: ${body?.error ?? body?.message ?? res.statusText}`);
   }
 
-  return parsed as InvoiceData;
+  return normalizeInvoiceData(parsed as Partial<InvoiceData>);
 };
