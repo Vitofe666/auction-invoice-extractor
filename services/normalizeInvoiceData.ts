@@ -4,6 +4,8 @@ type PartialInvoiceData = Partial<InvoiceData> & {
   LineItems?: Array<Partial<LineItem> | null | undefined> | null;
 };
 
+type InvoiceEnvelope = { InvoiceData?: PartialInvoiceData | null | undefined };
+
 const isLineType = (value: unknown): value is LineType =>
   typeof value === "string" && Object.values(LineType).includes(value as LineType);
 
@@ -45,15 +47,24 @@ const normalizeLineItem = (item: Partial<LineItem> | null | undefined): LineItem
   LineTotal: toNumber(item?.LineTotal, 0),
 });
 
-export const normalizeInvoiceData = (payload: PartialInvoiceData | null | undefined): InvoiceData => ({
-  InvoiceNumber: toStringValue(payload?.InvoiceNumber, ""),
-  InvoiceDate: toStringValue(payload?.InvoiceDate, ""),
-  SupplierName: toStringValue(payload?.SupplierName, ""),
-  TotalAmount: toNumber(payload?.TotalAmount, 0),
-  Currency: toStringValue(payload?.Currency, ""),
-  LineItems: Array.isArray(payload?.LineItems)
-    ? payload!.LineItems.filter(Boolean).map(normalizeLineItem)
-    : [],
-});
+export const normalizeInvoiceData = (
+  payload: PartialInvoiceData | InvoiceEnvelope | null | undefined
+): InvoiceData => {
+  const invoicePayload: PartialInvoiceData | null | undefined =
+    payload && typeof payload === "object" && "InvoiceData" in payload
+      ? (payload as InvoiceEnvelope).InvoiceData
+      : (payload as PartialInvoiceData | null | undefined);
+
+  return {
+    InvoiceNumber: toStringValue(invoicePayload?.InvoiceNumber, ""),
+    InvoiceDate: toStringValue(invoicePayload?.InvoiceDate, ""),
+    SupplierName: toStringValue(invoicePayload?.SupplierName, ""),
+    TotalAmount: toNumber(invoicePayload?.TotalAmount, 0),
+    Currency: toStringValue(invoicePayload?.Currency, ""),
+    LineItems: Array.isArray(invoicePayload?.LineItems)
+      ? invoicePayload!.LineItems.filter(Boolean).map(normalizeLineItem)
+      : [],
+  };
+};
 
 export default normalizeInvoiceData;
