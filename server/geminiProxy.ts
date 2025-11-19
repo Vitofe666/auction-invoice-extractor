@@ -25,7 +25,13 @@ if (!process.env.GEMINI_API_KEY) {
 }
 console.log('===================================\n');
 
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and extract structured data following specific VAT rules.
+// FIX: Replaced the long, combined prompt with structured components for the Gemini API.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
+
+OUTPUT CONTRACT (STRICT):
+- Return a single JSON object shaped exactly as { "InvoiceData": { ...fields below... } }
+- Populate every header field you can from the invoice. Do not leave strings blank unless the value is truly missing.
+- Always include at least one LineItems entry when any monetary amounts are present.
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
@@ -74,12 +80,34 @@ const USER_PROMPT = "Extract the structured data from the following auction hous
 const INVOICE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    InvoiceNumber: { type: Type.STRING },
-    InvoiceDate: { type: Type.STRING },
-    SupplierName: { type: Type.STRING },
-    TotalAmount: { type: Type.NUMBER },
-    Currency: { type: Type.STRING },
-    LineItems: { type: Type.ARRAY },
+    InvoiceData: {
+      type: Type.OBJECT,
+      properties: {
+        InvoiceNumber: { type: Type.STRING },
+        InvoiceDate: { type: Type.STRING },
+        SupplierName: { type: Type.STRING },
+        TotalAmount: { type: Type.NUMBER },
+        Currency: { type: Type.STRING },
+        LineItems: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              LineType: { type: Type.STRING },
+              LotNumber: { type: Type.STRING },
+              Description: { type: Type.STRING },
+              Quantity: { type: Type.NUMBER },
+              UnitPrice: { type: Type.NUMBER },
+              TaxType: { type: Type.STRING },
+              TaxRate: { type: Type.NUMBER },
+              TaxAmount: { type: Type.NUMBER },
+              VatIncluded: { type: Type.BOOLEAN },
+              LineTotal: { type: Type.NUMBER },
+            },
+          },
+        },
+      },
+    },
   },
 };
 
