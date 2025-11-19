@@ -1,18 +1,14 @@
-diff --git a/services/geminiService.ts b/services/geminiService.ts
-index 389472be1b8a8bdfadaaadc40b87cea8c04811aa..30268057490c7905f8488839ef58f767fc26146d 100644
---- a/services/geminiService.ts
-+++ b/services/geminiService.ts
-@@ -1,36 +1,44 @@
+
  import type { InvoiceData } from "../types";
  
-+const normalizeBaseUrl = (url: string | undefined): string => {
-+  if (!url) return "";
-+  return url.endsWith("/") ? url.slice(0, -1) : url;
-+};
-+
-+const baseUrl = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
-+const apiEndpoint = baseUrl ? `${baseUrl}/api/extract-invoice` : "/api/extract-invoice";
-+
+const normalizeBaseUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+};
+
+const baseUrl = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
+const apiEndpoint = baseUrl ? `${baseUrl}/api/extract-invoice` : "/api/extract-invoice";
+
  /**
   * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
   * Field name: "image" (multipart/form-data)
@@ -21,8 +17,7 @@ index 389472be1b8a8bdfadaaadc40b87cea8c04811aa..30268057490c7905f8488839ef58f767
    const form = new FormData();
    form.append("image", imageFile);
  
--  const res = await fetch("/api/extract-invoice", {
-+  const res = await fetch(apiEndpoint, {
+ const res = await fetch(apiEndpoint, {
      method: "POST",
      body: form,
    });
