@@ -51,6 +51,8 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
    > The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or
    > set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
 
+5. The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
+   
 ### Error Handling and Logging
 
 The Gemini proxy server includes comprehensive error handling and logging to help diagnose issues:

@@ -1,9 +1,13 @@
+
 import type { InvoiceData } from "../types";
 import { normalizeInvoiceData } from "./normalizeInvoiceData";
 
 /**
  * Client now POSTs the image to the server-side proxy instead of calling Gemini directly.
  * Field name: "image" (multipart/form-data)
+ *
+ * @param imageFile - image File to send
+ * @param endpoint - optional override for the endpoint (defaults to configured apiEndpoint)
  */
 export const extractInvoiceData = async (
   imageFile: File,
@@ -38,9 +42,18 @@ export const extractInvoiceData = async (
   }
 
   if (!res.ok) {
-    // If server returned JSON error payload, prefer that message
-    const body = parsed as { error?: string; message?: string } | null;
-    throw new Error(`Server error ${res.status}: ${body?.error ?? body?.message ?? res.statusText}`);
+    // If parsed is an object with message or error, include it in the thrown error
+    let bodyMsg = "";
+    try {
+      if (parsed && typeof parsed === "object") {
+        const p = parsed as Record<string, unknown>;
+        if (typeof p.message === "string") bodyMsg = `: ${p.message}`;
+        else if (typeof p.error === "string") bodyMsg = `: ${p.error}`;
+      }
+    } catch {
+      // ignore parsing for error message
+    }
+    throw new Error(`Server error ${res.status}${bodyMsg}`);
   }
 
   return normalizeInvoiceData(parsed as Partial<InvoiceData>);
