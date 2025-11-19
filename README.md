@@ -48,6 +48,9 @@ Set `GEMINI_API_KEY` in your Render (or server) runtime environment variables. T
    ```bash
    npm run dev
    ```
+   > The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or
+   > set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
+
 5. The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
    
 ### Error Handling and Logging
@@ -177,9 +180,9 @@ Returns:
    ```
    This runs on port 3001 by default using ts-node for development.
 
-4. In a separate terminal, run the Vite client:
+4. In a separate terminal, run the Vite client (set `VITE_BACKEND_URL` if the proxy is not served from the same origin):
    ```bash
-   npm run dev
+   VITE_BACKEND_URL=http://localhost:3001 npm run dev
    ```
 
 **How it works:**
