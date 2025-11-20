@@ -191,12 +191,70 @@ function validateResponseStructure(response: any): { isValid: boolean; error?: s
     return { isValid: false, error: 'Response object is null or undefined' };
   }
 
-  // Check if response has text property
-  if (!response.text && !response.candidates) {
-    return { isValid: false, error: 'Response missing both "text" and "candidates" properties' };
+  // Accept responses that expose text directly, via nested "response", or via candidates
+  const hasText =
+    typeof response.text === 'string' ||
+    typeof response.text === 'function' ||
+    typeof response?.response?.text === 'string' ||
+    typeof response?.response?.text === 'function';
+
+  const hasCandidates =
+    Array.isArray(response.candidates) || Array.isArray(response?.response?.candidates);
+
+  if (!hasText && !hasCandidates) {
+    return {
+      isValid: false,
+      error: 'Response missing both "text" and "candidates" properties',
+    };
   }
 
   return { isValid: true };
+}
+
+async function resolveTextValue(textValue: unknown): Promise<string | null> {
+  if (!textValue) return null;
+
+  if (typeof textValue === 'function') {
+    const result = textValue();
+    return typeof result === 'string' ? result : (await result)?.toString() ?? null;
+  }
+
+  if (typeof textValue === 'string') {
+    return textValue;
+  }
+
+  return null;
+}
+
+async function extractResponseText(response: any): Promise<string | null> {
+  // Try direct text helpers first
+  const directText = await resolveTextValue(response?.text);
+  if (directText?.trim()) return directText.trim();
+
+  // Some library versions nest the response
+  const nestedText = await resolveTextValue(response?.response?.text);
+  if (nestedText?.trim()) return nestedText.trim();
+
+  // Fallback: extract text from the first candidate parts
+  const candidates = response?.candidates || response?.response?.candidates;
+  if (Array.isArray(candidates) && candidates.length > 0) {
+    for (const candidate of candidates) {
+      const parts = candidate?.content?.parts;
+      if (Array.isArray(parts)) {
+        const textParts = parts
+          .map((part: any) => part?.text)
+          .filter((text: any) => typeof text === 'string')
+          .join('')
+          .trim();
+
+        if (textParts) {
+          return textParts;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -333,12 +391,17 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     }
 
     // Extract text from response
-    const jsonString = (response as any).text?.trim();
+    const jsonString = await extractResponseText(response);
     
     if (!jsonString) {
       console.error(`[${requestId}] ❌ ERROR: Empty response text from Gemini API`);
       console.error(`[${requestId}]   Response has "text" property: ${response.hasOwnProperty('text')}`);
       console.error(`[${requestId}]   Text value: ${JSON.stringify((response as any).text)}`);
+
+      if (response.response) {
+        console.error(`[${requestId}]   Nested response keys: ${Object.keys(response.response)}`);
+        console.error(`[${requestId}]   Nested text value: ${JSON.stringify((response as any).response?.text)}`);
+      }
       
       if (response.candidates) {
         console.error(`[${requestId}]   Candidates array length: ${response.candidates.length}`);
