@@ -386,8 +386,18 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
 
     const apiCallStartTime = Date.now();
 
+    const model = ai.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: { text: SYSTEM_INSTRUCTION },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: INVOICE_SCHEMA,
+      },
+    });
+
     let response: any;
     try {
+      response = await model.generateContent({
       response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
