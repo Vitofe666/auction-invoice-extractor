@@ -121,14 +121,22 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const imagePart = { inlineData: { mimeType, data: base64 } };
     const textPart = { text: USER_PROMPT };
 
-    const response = await ai.models.generateContent({
+    const model = ai.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      contents: { parts: [textPart, imagePart] },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: { text: SYSTEM_INSTRUCTION },
+      generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: INVOICE_SCHEMA,
       },
+    });
+
+    const response = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [textPart, imagePart],
+        },
+      ],
     });
 
     const jsonString = (response as any).text?.trim() ?? JSON.stringify(response);
