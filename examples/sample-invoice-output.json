@@ -1,0 +1,47 @@
+{
+  "InvoiceData": {
+    "InvoiceNumber": "INV-2024-001",
+    "InvoiceDate": "2024-01-15",
+    "SupplierName": "Example Auction House",
+    "TotalAmount": 1440.0,
+    "Currency": "GBP",
+    "LineItems": [
+      {
+        "LineType": "Lot",
+        "LotNumber": "123",
+        "Description": "Antique Vase",
+        "Quantity": 1,
+        "UnitPrice": 1000.0,
+        "TaxType": null,
+        "TaxRate": 0,
+        "TaxAmount": 0,
+        "VatIncluded": false,
+        "LineTotal": 1000.0
+      },
+      {
+        "LineType": "Premium",
+        "LotNumber": "123",
+        "Description": "Buyers Premium (20%)",
+        "Quantity": 1,
+        "UnitPrice": 200.0,
+        "TaxType": null,
+        "TaxRate": 0,
+        "TaxAmount": 0,
+        "VatIncluded": false,
+        "LineTotal": 200.0
+      },
+      {
+        "LineType": "Surcharge",
+        "LotNumber": "123",
+        "Description": "Live Bidding Surcharge",
+        "Quantity": 1,
+        "UnitPrice": 200.0,
+        "TaxType": "VAT",
+        "TaxRate": 20,
+        "TaxAmount": 40.0,
+        "VatIncluded": false,
+        "LineTotal": 240.0
+      }
+    ]
+  }
+}

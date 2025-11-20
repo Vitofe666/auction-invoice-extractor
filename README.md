@@ -48,6 +48,62 @@ Set `ANTHROPIC_API_KEY` in your Render (or server) runtime environment variables
    ```bash
    npm run dev
    ```
+   > The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or
+   > set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
+
+5. The frontend automatically detects a `VITE_BACKEND_URL` environment variable. Leave it unset for same-origin development, or set it (e.g., `VITE_BACKEND_URL=http://localhost:3000`) when the Gemini proxy runs on a different host/port.
+   
+### Error Handling and Logging
+
+The Gemini proxy server includes comprehensive error handling and logging to help diagnose issues:
+
+#### Startup Logging
+When the server starts, it logs:
+- Server port and environment
+- GEMINI_API_KEY configuration status
+- Clear warnings if the API key is missing
+
+#### Request Logging
+Each request is tracked with:
+- Unique request ID for tracing
+- Timestamp
+- File details (MIME type, size, filename)
+- API call duration
+- Response characteristics
+
+#### Error Categories
+Errors are categorized for easy diagnosis:
+- `AUTHENTICATION_ERROR` - Invalid or missing API key
+- `RATE_LIMIT_ERROR` - API quota exceeded
+- `NETWORK_ERROR` - Connection or timeout issues
+- `INVALID_FILE_FORMAT` - Unsupported file type
+- `CONTENT_POLICY_ERROR` - Content policy violation
+- `SERVICE_UNAVAILABLE` - Gemini API temporarily unavailable
+- `EMPTY_RESPONSE` - API returned empty content
+- `JSON_PARSE_ERROR` - Invalid JSON in response
+- `CONFIGURATION_ERROR` - Server misconfiguration
+
+Each error response includes:
+- User-friendly error message
+- Technical details for debugging
+- Request ID for tracing
+- Whether the error is retryable
+
+#### Health Check
+Check server status at `/health` endpoint:
+```bash
+curl http://localhost:3000/health
+```
+
+Returns:
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-11-18T15:05:19.425Z",
+  "geminiApiConfigured": true,
+  "environment": "development"
+}
+```
 
 5. For production build of the server:
    ```bash
@@ -124,9 +180,9 @@ Set `ANTHROPIC_API_KEY` in your Render (or server) runtime environment variables
    ```
    This runs on port 3001 by default using ts-node for development.
 
-4. In a separate terminal, run the Vite client:
+4. In a separate terminal, run the Vite client (set `VITE_BACKEND_URL` if the proxy is not served from the same origin):
    ```bash
-   npm run dev
+   VITE_BACKEND_URL=http://localhost:3001 npm run dev
    ```
 
 **How it works:**

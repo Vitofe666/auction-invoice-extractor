@@ -11,7 +11,27 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and extract structured data following specific VAT rules.
+// Log startup configuration
+console.log('=== Gemini Proxy Server Startup ===');
+console.log(`Server Port: ${PORT}`);
+console.log(`Node Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`GEMINI_API_KEY present: ${!!process.env.GEMINI_API_KEY}`);
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ CRITICAL: GEMINI_API_KEY environment variable is not set!');
+  console.error('   The server will reject all requests. Please set GEMINI_API_KEY.');
+} else {
+  const keyLength = process.env.GEMINI_API_KEY.length;
+  console.log(`✓ GEMINI_API_KEY configured (length: ${keyLength} characters)`);
+}
+console.log('===================================\n');
+
+// FIX: Replaced the long, combined prompt with structured components for the Gemini API.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
+
+OUTPUT CONTRACT (STRICT):
+- Return a single JSON object shaped exactly as { "InvoiceData": { ...fields below... } }
+- Populate every header field you can from the invoice. Do not leave strings blank unless the value is truly missing.
+- Always include at least one LineItems entry when any monetary amounts are present.
 
 AUCTION HOUSE VAT RULES (CRITICAL - FOLLOW EXACTLY):
 
@@ -145,6 +165,19 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
       } else {
         throw new Error('Failed to parse JSON response from Claude API');
       }
+
+      const errorInfo = categorizeError(apiError);
+      console.error(`[${requestId}] Error category: ${errorInfo.category}`);
+      console.error(`[${requestId}] Is retryable: ${errorInfo.isRetryable}`);
+
+      return res.status(500).json({
+        error: 'Gemini API call failed',
+        details: errorInfo.message,
+        category: errorInfo.category,
+        technicalDetails: apiError?.message || String(apiError),
+        isRetryable: errorInfo.isRetryable,
+        requestId,
+      });
     }
     
     return res.json(parsed);
@@ -163,7 +196,15 @@ export function startServer() {
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok' });
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    geminiApiConfigured: !!ai,
+    environment: process.env.NODE_ENV || 'development',
+  };
+  
+  console.log('Health check:', health);
+  res.json(health);
 });
 
 // Export the app for testing
@@ -174,3 +215,17 @@ export default app;
 if (typeof require !== 'undefined' && require.main === module) {
   startServer();
 }
+
+// Auto-start when run directly
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Check if this module is being run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer();
+}
+
+export default app;

@@ -16,6 +16,14 @@ interface InvoiceItem {
   isProcessing: boolean;
 }
 
+const normalizeBaseUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+};
+
+const configuredBackend = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
+const extractEndpoint = configuredBackend ? `${configuredBackend}/api/extract-invoice` : '/api/extract-invoice';
+
 const App: React.FC = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -69,7 +77,7 @@ const App: React.FC = () => {
         ));
         
         try {
-          const data = await extractInvoiceData(invoiceItems[i].file);
+          const data = await extractInvoiceData(invoiceItems[i].file, extractEndpoint);
           setInvoiceItems(prev => prev.map((item, idx) => 
             idx === i ? { ...item, data, isProcessing: false } : item
           ));
@@ -93,7 +101,7 @@ const App: React.FC = () => {
       setExtractedData(null);
 
       try {
-        const data = await extractInvoiceData(imageFile);
+        const data = await extractInvoiceData(imageFile, extractEndpoint);
         setExtractedData(data);
       } catch (err) {
         console.error(err);
