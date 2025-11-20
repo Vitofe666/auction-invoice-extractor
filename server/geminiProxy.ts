@@ -390,12 +390,15 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     try {
       response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [textPart, imagePart] },
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: INVOICE_SCHEMA,
-        },
+        contents: [
+          {
+            role: 'user',
+            parts: [textPart, imagePart],
+          },
+        ],
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: 'application/json',
+        responseSchema: INVOICE_SCHEMA,
       });
     } catch (apiError: any) {
       const apiCallDuration = Date.now() - apiCallStartTime;
@@ -488,9 +491,13 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
       parsed = JSON.parse(jsonString);
       console.log(`[${requestId}] ✓ JSON parsing successful`);
 
+      const invoicePayload = parsed?.InvoiceData && typeof parsed.InvoiceData === 'object'
+        ? parsed.InvoiceData
+        : parsed;
+
       const rootKeys = parsed && typeof parsed === 'object' ? Object.keys(parsed) : [];
-      const invoiceDataKeys = parsed?.InvoiceData && typeof parsed.InvoiceData === 'object'
-        ? Object.keys(parsed.InvoiceData)
+      const invoiceDataKeys = invoicePayload && typeof invoicePayload === 'object'
+        ? Object.keys(invoicePayload)
         : [];
 
       if (rootKeys.length === 0 || (parsed.InvoiceData && invoiceDataKeys.length === 0)) {
@@ -511,11 +518,11 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
       // Log parsed data structure
       if (parsed) {
         console.log(`[${requestId}] Parsed data structure:`);
-        console.log(`[${requestId}]   - InvoiceNumber: ${parsed.InvoiceNumber || 'N/A'}`);
-        console.log(`[${requestId}]   - SupplierName: ${parsed.SupplierName || 'N/A'}`);
-        console.log(`[${requestId}]   - TotalAmount: ${parsed.TotalAmount || 'N/A'}`);
-        console.log(`[${requestId}]   - Currency: ${parsed.Currency || 'N/A'}`);
-        console.log(`[${requestId}]   - LineItems count: ${parsed.LineItems?.length || 0}`);
+        console.log(`[${requestId}]   - InvoiceNumber: ${invoicePayload.InvoiceNumber || 'N/A'}`);
+        console.log(`[${requestId}]   - SupplierName: ${invoicePayload.SupplierName || 'N/A'}`);
+        console.log(`[${requestId}]   - TotalAmount: ${invoicePayload.TotalAmount || 'N/A'}`);
+        console.log(`[${requestId}]   - Currency: ${invoicePayload.Currency || 'N/A'}`);
+        console.log(`[${requestId}]   - LineItems count: ${invoicePayload.LineItems?.length || 0}`);
       }
     } catch (parseError: any) {
       console.error(`[${requestId}] ❌ ERROR: JSON parsing failed`);
