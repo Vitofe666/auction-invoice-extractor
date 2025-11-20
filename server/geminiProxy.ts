@@ -355,15 +355,15 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     console.log(`[${requestId}]   - Size: ${fileSizeKB} KB`);
     console.log(`[${requestId}]   - Original name: ${req.file.originalname || 'N/A'}`);
 
-    // Validate MIME type
-    const validMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    // Validate MIME type - allow PDFs so invoices uploaded as documents still reach Gemini
+    const validMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
     if (!validMimeTypes.includes(mimeType.toLowerCase())) {
       console.error(`[${requestId}] ❌ ERROR: Invalid MIME type`);
       console.error(`[${requestId}]   - Received: ${mimeType}`);
       console.error(`[${requestId}]   - Expected one of: ${validMimeTypes.join(', ')}`);
       return res.status(400).json({
         error: 'Invalid file type',
-        details: `File type ${mimeType} is not supported. Please upload a JPEG, PNG, GIF, or WebP image.`,
+        details: `File type ${mimeType} is not supported. Please upload a JPEG, PNG, GIF, WebP image, or PDF document.`,
         category: 'INVALID_FILE_FORMAT',
         requestId,
       });
@@ -372,6 +372,9 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const base64 = req.file.buffer.toString('base64');
     const base64Length = base64.length;
     console.log(`[${requestId}]   - Base64 length: ${base64Length} characters`);
+    if (mimeType.toLowerCase() === 'application/pdf') {
+      console.log(`[${requestId}]   - Detected PDF upload. Sending original PDF bytes to Gemini for extraction.`);
+    }
 
     const imagePart = { inlineData: { mimeType, data: base64 } };
     const textPart = { text: USER_PROMPT };
