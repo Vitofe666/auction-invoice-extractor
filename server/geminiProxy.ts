@@ -77,6 +77,59 @@ The output MUST strictly adhere to the provided JSON schema. Do not generate any
 
 const USER_PROMPT = "Extract the structured data from the following auction house invoice.";
 
+// Example JSON structure the model should follow (used for diagnostics when the API returns empty content)
+const EXPECTED_JSON_EXAMPLE = {
+  ErrorNumber: 10,
+  Type: 'ValidationException',
+  Message: 'A validation exception occurred',
+  Elements: [
+    {
+      PurchaseOrderID: '00000000-0000-0000-0000-000000000000',
+      DateString: '2019-03-13T00:00:00',
+      Date: '/Date(1552435200000+0000)/',
+      HasErrors: true,
+      IsDiscounted: false,
+      TotalDiscount: 0.0,
+      Type: 'PURCHASEORDER',
+      CurrencyCode: 'GBP',
+      Contact: {
+        ContactID: '00000000-0000-0000-0000-000000000000',
+        Addresses: [],
+        Phones: [],
+        ContactGroups: [],
+        ContactPersons: [],
+        HasValidationErrors: false,
+        ValidationErrors: [],
+      },
+      Status: 'DRAFT',
+      LineAmountTypes: 'Exclusive',
+      LineItems: [
+        {
+          Description: 'Foobar',
+          UnitAmount: 20.0,
+          TaxType: 'INPUT2',
+          TaxAmount: 4.0,
+          LineAmount: 20.0,
+          AccountCode: '710',
+          Tracking: [],
+          Quantity: 1.0,
+          AccountID: 'bc304725-d5d5-4d55-936e-6b44af184401',
+          ValidationErrors: [],
+        },
+      ],
+      SubTotal: 20.0,
+      TotalTax: 4.0,
+      Total: 24.0,
+      ValidationErrors: [
+        {
+          Message:
+            'The Contact must contain at least 1 of the following elements to identify the contact: ContactID, ContactNumber',
+        },
+      ],
+    },
+  ],
+};
+
 const INVOICE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -302,15 +355,15 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     console.log(`[${requestId}]   - Size: ${fileSizeKB} KB`);
     console.log(`[${requestId}]   - Original name: ${req.file.originalname || 'N/A'}`);
 
-    // Validate MIME type
-    const validMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    // Validate MIME type - allow PDFs so invoices uploaded as documents still reach Gemini
+    const validMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
     if (!validMimeTypes.includes(mimeType.toLowerCase())) {
       console.error(`[${requestId}] ❌ ERROR: Invalid MIME type`);
       console.error(`[${requestId}]   - Received: ${mimeType}`);
       console.error(`[${requestId}]   - Expected one of: ${validMimeTypes.join(', ')}`);
       return res.status(400).json({
         error: 'Invalid file type',
-        details: `File type ${mimeType} is not supported. Please upload a JPEG, PNG, GIF, or WebP image.`,
+        details: `File type ${mimeType} is not supported. Please upload a JPEG, PNG, GIF, WebP image, or PDF document.`,
         category: 'INVALID_FILE_FORMAT',
         requestId,
       });
@@ -319,6 +372,9 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const base64 = req.file.buffer.toString('base64');
     const base64Length = base64.length;
     console.log(`[${requestId}]   - Base64 length: ${base64Length} characters`);
+    if (mimeType.toLowerCase() === 'application/pdf') {
+      console.log(`[${requestId}]   - Detected PDF upload. Sending original PDF bytes to Gemini for extraction.`);
+    }
 
     const imagePart = { inlineData: { mimeType, data: base64 } };
     const textPart = { text: USER_PROMPT };
@@ -431,7 +487,27 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     try {
       parsed = JSON.parse(jsonString);
       console.log(`[${requestId}] ✓ JSON parsing successful`);
-      
+
+      const rootKeys = parsed && typeof parsed === 'object' ? Object.keys(parsed) : [];
+      const invoiceDataKeys = parsed?.InvoiceData && typeof parsed.InvoiceData === 'object'
+        ? Object.keys(parsed.InvoiceData)
+        : [];
+
+      if (rootKeys.length === 0 || (parsed.InvoiceData && invoiceDataKeys.length === 0)) {
+        console.error(`[${requestId}] ❌ ERROR: Gemini returned an empty JSON payload`);
+        console.error(`[${requestId}]   Root keys: ${rootKeys.join(', ') || 'none'}`);
+        console.error(`[${requestId}]   InvoiceData keys: ${invoiceDataKeys.join(', ') || 'none'}`);
+
+        return res.status(500).json({
+          error: 'Empty JSON from Gemini',
+          details:
+            'Gemini returned an empty JSON object. The response should contain populated invoice fields like in the example.',
+          category: 'EMPTY_JSON',
+          expectedExample: EXPECTED_JSON_EXAMPLE,
+          requestId,
+        });
+      }
+
       // Log parsed data structure
       if (parsed) {
         console.log(`[${requestId}] Parsed data structure:`);
