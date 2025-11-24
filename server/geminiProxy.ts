@@ -3,6 +3,11 @@ import multer from 'multer';
 import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Request, Response } from 'express';
+import { config } from 'dotenv';
+
+// Load environment variables from .env file (for local development)
+// In production (Render), environment variables are set through the dashboard
+config();
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
