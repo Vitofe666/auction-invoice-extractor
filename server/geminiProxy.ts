@@ -26,7 +26,13 @@ if (!process.env.GEMINI_API_KEY) {
 console.log('===================================\n');
 
 // FIX: Replaced the long, combined prompt with structured components for the Gemini API.
-const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
+const SYSTEM_INSTRUCTION = `You are an expert financial data extraction and parsing engine specialized in auction house invoices. Your sole function is to accept an image OR PDF document of an auction house bill and convert the data into a strict JSON format with correct VAT handling.
+
+IMPORTANT: When processing PDF documents:
+- Read and extract ALL text content from the PDF carefully
+- PDFs may contain multiple pages - process all pages
+- Extract table data accurately, preserving row and column structure
+- Pay special attention to numerical values and currency symbols
 
 OUTPUT CONTRACT (STRICT):
 - Return a single JSON object shaped exactly as { "InvoiceData": { ...fields below... } }
@@ -372,32 +378,31 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const base64 = req.file.buffer.toString('base64');
     const base64Length = base64.length;
     console.log(`[${requestId}]   - Base64 length: ${base64Length} characters`);
-    if (mimeType.toLowerCase() === 'application/pdf') {
-      console.log(`[${requestId}]   - Detected PDF upload. Sending original PDF bytes to Gemini for extraction.`);
+    
+    const isPdf = mimeType.toLowerCase() === 'application/pdf';
+    if (isPdf) {
+      console.log(`[${requestId}]   - Detected PDF upload. Using enhanced PDF extraction instructions.`);
     }
 
     const imagePart = { inlineData: { mimeType, data: base64 } };
-    const textPart = { text: USER_PROMPT };
+    // Enhanced prompt for PDFs with specific instructions
+    const promptText = isPdf 
+      ? "Extract the structured data from the following PDF document containing an auction house invoice. This is a PDF document - please read and extract all text content carefully, including header information (invoice number, date, supplier name, total amount, currency) and all line items with their descriptions, quantities, prices, and tax information."
+      : USER_PROMPT;
+    const textPart = { text: promptText };
 
     console.log(`[${requestId}] Calling Gemini API...`);
     console.log(`[${requestId}]   - Model: gemini-2.5-flash`);
     console.log(`[${requestId}]   - Response format: application/json`);
     console.log(`[${requestId}]   - System instruction length: ${SYSTEM_INSTRUCTION.length} characters`);
+    if (isPdf) {
+      console.log(`[${requestId}]   - Using PDF-specific extraction prompt`);
+    }
 
     const apiCallStartTime = Date.now();
 
-    const model = ai.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: { text: SYSTEM_INSTRUCTION },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: INVOICE_SCHEMA,
-      },
-    });
-
     let response: any;
     try {
-      response = await model.generateContent({
       response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
@@ -406,9 +411,11 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
             parts: [textPart, imagePart],
           },
         ],
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: INVOICE_SCHEMA,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: INVOICE_SCHEMA,
+        },
       });
     } catch (apiError: any) {
       const apiCallDuration = Date.now() - apiCallStartTime;
