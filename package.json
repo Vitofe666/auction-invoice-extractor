@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:server": "ts-node server/geminiProxy.ts",
+    "dev:server": "tsx server/geminiProxy.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "start:server": "node ./dist/server/geminiProxy.js"
   },
