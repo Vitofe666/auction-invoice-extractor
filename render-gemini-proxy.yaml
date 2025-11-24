@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: auction-invoice-extractor-1
+    env: node
+    buildCommand: npm install && npm run build:server
+    startCommand: npm run start:server
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # Set this manually in Render dashboard for security
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production

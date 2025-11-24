@@ -11,6 +11,19 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5173,
         host: '0.0.0.0',
+        // Proxy API requests to Gemini Proxy Server during local development
+        proxy: {
+          '/api': {
+            target: env.VITE_BACKEND_URL || 'http://localhost:3000',
+            changeOrigin: true,
+            secure: false,
+          },
+          '/health': {
+            target: env.VITE_BACKEND_URL || 'http://localhost:3000',
+            changeOrigin: true,
+            secure: false,
+          }
+        }
       },
       plugins: [react()],
       define: {

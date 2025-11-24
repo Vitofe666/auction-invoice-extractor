@@ -22,27 +22,53 @@
 - ✅ Fixed hardcoded URL in `xeroService.ts`
 - ✅ Updated Vite config to handle `VITE_BACKEND_URL`
 - ✅ Removed exposed API key from `render-frontend.yaml`
+- ✅ Created `render-gemini-proxy.yaml` for Gemini proxy server deployment
 
 ### 2. Render Deployment Setup
 
-#### Frontend Deployment:
+**IMPORTANT: This application requires THREE separate Render services:**
+
+#### 1. Gemini Proxy Server (Web Service) - **REQUIRED**
+This server handles file uploads and Gemini AI extraction.
+
+**Render Configuration File:** `render-gemini-proxy.yaml`
+
 1. **Environment Variables in Render Dashboard:**
    ```
-   VITE_API_KEY=your_new_google_gemini_api_key
-   VITE_BACKEND_URL=https://vitofe666-auction-invoice-backend.onrender.com
+   GEMINI_API_KEY=your_new_google_gemini_api_key
+   PORT=3000
    NODE_ENV=production
    ```
+
+2. **Build Settings:**
+   - Build Command: `npm install && npm run build:server`
+   - Start Command: `npm run start:server`
+
+3. **Note the deployed URL** - this is your `VITE_BACKEND_URL` for the frontend
+
+#### 2. Frontend (Static Site)
+**Render Configuration File:** `render-frontend.yaml`
+
+1. **Environment Variables in Render Dashboard:**
+   ```
+   VITE_BACKEND_URL=https://[your-gemini-proxy-url].onrender.com
+   NODE_ENV=production
+   ```
+   
+   **NOTE:** `VITE_BACKEND_URL` must point to the Gemini Proxy Server URL, NOT the Xero backend!
 
 2. **Build Settings:**
    - Build Command: `npm install && npm run build`
    - Publish Directory: `dist`
 
-#### Backend Deployment:
+#### 3. Xero Backend (Web Service)
+**Render Configuration File:** `render-backend.yaml`
+
 1. **Environment Variables in Render Dashboard:**
    ```
    XERO_CLIENT_ID=your_xero_client_id
    XERO_CLIENT_SECRET=your_xero_client_secret
-   XERO_REDIRECT_URI=https://vitofe666-auction-invoice-backend.onrender.com/callback
+   XERO_REDIRECT_URI=https://[your-xero-backend-url].onrender.com/callback
    XERO_WEBHOOK_KEY=your_xero_webhook_key
    PORT=10000
    NODE_ENV=production
@@ -54,16 +80,27 @@
 
 ## 🐛 Common Issues & Solutions
 
-### Issue 1: "VITE_API_KEY environment variable is not set"
-**Solution:** Set the API key in Render's environment variables dashboard (not in code)
+### Issue 1: "File upload fails between step 2 and step 3"
+**Symptoms:** File uploads successfully but nothing happens, or you get a network error
+**Root Cause:** The Gemini Proxy Server is not deployed or `VITE_BACKEND_URL` is incorrect
+**Solution:** 
+1. Ensure you've deployed the Gemini Proxy Server using `render-gemini-proxy.yaml`
+2. Verify `GEMINI_API_KEY` is set in the Gemini Proxy Server environment variables
+3. Confirm `VITE_BACKEND_URL` in the frontend points to the Gemini Proxy Server (not the Xero backend)
+4. Check the Gemini Proxy Server logs for errors
 
-### Issue 2: Frontend can't connect to backend
-**Solution:** Check that `VITE_BACKEND_URL` matches your backend's deployed URL
+### Issue 2: "VITE_API_KEY environment variable is not set"
+**Solution:** This is outdated - the app now uses a server-side proxy. Remove any references to `VITE_API_KEY` from frontend environment variables.
 
-### Issue 3: Xero integration not working
-**Solution:** Verify all Xero environment variables are set correctly in backend
+### Issue 3: Frontend can't connect to backend
+**Solution:** 
+- Check that `VITE_BACKEND_URL` points to your **Gemini Proxy Server** URL (e.g., `https://auction-invoice-extractor-1.onrender.com`)
+- Do NOT point it to the Xero backend URL
 
-### Issue 4: Build fails with TypeScript errors
+### Issue 4: Xero integration not working
+**Solution:** Verify all Xero environment variables are set correctly in the **Xero Backend** service (separate from Gemini Proxy Server)
+
+### Issue 5: Build fails with TypeScript errors
 **Solution:** Run `npm run build` locally first to identify issues
 
 ## ✅ Testing Checklist
