@@ -8,6 +8,6 @@ services:
       - key: VITE_API_KEY
         sync: false  # Set this manually in Render dashboard for security
       - key: VITE_BACKEND_URL
-        value: https://auction-invoice-extractor-2.onrender.com
+        value: https://auction-invoice-extractor-1.onrender.com
       - key: NODE_ENV
         value: production
