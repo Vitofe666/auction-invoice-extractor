@@ -21,8 +21,17 @@ const normalizeBaseUrl = (url: string | undefined): string => {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
 
-const configuredBackend = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
-const extractEndpoint = configuredBackend ? `${configuredBackend}/api/extract-invoice` : '/api/extract-invoice';
+// OLD:
+// const configuredBackend = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
+// const extractEndpoint = configuredBackend ? `${configuredBackend}/api/extract-invoice` : '/api/extract-invoice';
+
+// NEW: use a Gemini-specific env var
+const configuredGeminiBackend = normalizeBaseUrl(
+  import.meta.env?.VITE_GEMINI_BACKEND_URL as string | undefined
+);
+const extractEndpoint = configuredGeminiBackend
+  ? `${configuredGeminiBackend}/api/extract-invoice`
+  : '/api/extract-invoice';
 
 const App: React.FC = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
