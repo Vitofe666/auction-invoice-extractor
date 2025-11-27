@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "dev:server": "ts-node server/geminiProxy.ts",
     "build:server": "tsc -p tsconfig.server.json",
-    "start:server": "node ./dist/server/geminiProxy.js"
+    "start:server": "node ./dist/server/geminiProxy.js",
+    "test:dates": "node tests/run-tests.cjs"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
