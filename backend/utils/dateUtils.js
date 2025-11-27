@@ -51,7 +51,7 @@ function formatDateForXero(dateStr) {
       console.info(`[dateUtils] Normalized date (fallback): "${dateStr}" -> "${normalizedDate}"`);
       return normalizedDate;
     }
-  } catch (e) {
+  } catch {
     // Parsing failed
   }
 

@@ -75,7 +75,7 @@ export const formatDateForXero = (dateStr: string | undefined | null): string | 
  */
 const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill => {
   // Normalize dates to ISO format (YYYY-MM-DD) for Xero API compatibility
-  const normalizedInvoiceDate = formatDateForXero(invoiceData.InvoiceDate) || invoiceData.InvoiceDate;
+  const normalizedInvoiceDate = formatDateForXero(invoiceData.InvoiceDate) as string;
   
   return {
     Type: 'ACCPAY',
