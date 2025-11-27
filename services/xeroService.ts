@@ -5,6 +5,68 @@ const PROXY_URL = process.env.VITE_BACKEND_URL ||
   (process.env.NODE_ENV === 'development' ? 'http://localhost:3002' : 'https://auction-invoice-extractor-1.onrender.com');
 
 /**
+ * Normalizes a date string to ISO format (YYYY-MM-DD) for Xero API compatibility.
+ * Supports common date formats: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+ * Also handles two-digit years (e.g., 20/11/25 -> 2025-11-20).
+ * 
+ * @param dateStr - The date string to normalize.
+ * @returns The normalized date in YYYY-MM-DD format, or the original string if parsing fails.
+ */
+export const formatDateForXero = (dateStr: string | undefined | null): string | undefined | null => {
+  if (!dateStr || typeof dateStr !== 'string') {
+    return dateStr;
+  }
+
+  const trimmedDate = dateStr.trim();
+  
+  // Check if already in ISO format (YYYY-MM-DD)
+  const isoPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const isoMatch = trimmedDate.match(isoPattern);
+  if (isoMatch) {
+    return trimmedDate; // Already in correct format
+  }
+
+  // Try to parse DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY formats
+  const ddmmyyyyPattern = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/;
+  const ddmmyyyyMatch = trimmedDate.match(ddmmyyyyPattern);
+  
+  if (ddmmyyyyMatch) {
+    let day = ddmmyyyyMatch[1].padStart(2, '0');
+    let month = ddmmyyyyMatch[2].padStart(2, '0');
+    let year = ddmmyyyyMatch[3];
+    
+    // Handle two-digit years (assume 2000s for years 00-99)
+    if (year.length === 2) {
+      const yearNum = parseInt(year, 10);
+      // Assume years 00-99 are 2000-2099
+      year = (2000 + yearNum).toString();
+    }
+    
+    const normalizedDate = `${year}-${month}-${day}`;
+    console.info(`[xeroService] Normalized date: "${dateStr}" -> "${normalizedDate}"`);
+    return normalizedDate;
+  }
+
+  // Fallback: try to parse using Date constructor and extract components
+  // This is a last resort and may have timezone issues, so we avoid using toISOString
+  try {
+    const parsed = new Date(trimmedDate);
+    if (!isNaN(parsed.getTime())) {
+      // Use toISOString and slice to get YYYY-MM-DD (UTC date)
+      const normalizedDate = parsed.toISOString().slice(0, 10);
+      console.info(`[xeroService] Normalized date (fallback): "${dateStr}" -> "${normalizedDate}"`);
+      return normalizedDate;
+    }
+  } catch {
+    // Parsing failed
+  }
+
+  // If all parsing attempts fail, log a warning and return original
+  console.warn(`[xeroService] Could not normalize date: "${dateStr}". Proceeding with original value.`);
+  return dateStr;
+};
+
+/**
  * Maps the extracted invoice data to the format required by the Xero API for creating a bill.
  * Note: Xero uses the 'Invoices' endpoint for both AR and AP, with the type 'ACCPAY' for bills.
  * @param invoiceData The extracted data from the invoice.
@@ -12,13 +74,16 @@ const PROXY_URL = process.env.VITE_BACKEND_URL ||
  * @returns A XeroBill object ready to be sent to the API.
  */
 const mapToXeroBill = (invoiceData: InvoiceData, accountCode: string): XeroBill => {
+  // Normalize dates to ISO format (YYYY-MM-DD) for Xero API compatibility
+  const normalizedInvoiceDate = formatDateForXero(invoiceData.InvoiceDate) || invoiceData.InvoiceDate;
+  
   return {
     Type: 'ACCPAY',
     Contact: {
       Name: invoiceData.SupplierName,
     },
-    DateString: invoiceData.InvoiceDate,
-    DueDateString: invoiceData.InvoiceDate, // You might want to calculate a real due date
+    DateString: normalizedInvoiceDate,
+    DueDateString: normalizedInvoiceDate, // You might want to calculate a real due date
     InvoiceNumber: invoiceData.InvoiceNumber,
     CurrencyCode: invoiceData.Currency,
     Status: 'DRAFT',

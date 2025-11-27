@@ -4,6 +4,7 @@ var cors = require('cors');
 var crypto = require('crypto');
 var multer = require('multer');
 var { XeroClient } = require('xero-node');
+var { formatDateForXero } = require('./utils/dateUtils');
 var app = express();
 
 console.log('Starting server setup...');
@@ -210,14 +211,18 @@ app.post('/upload-bill', upload.single('invoiceFile'), async function (req, res)
       // Refresh token if needed
       await xero.refreshToken();
       
+      // Normalize dates to ISO format (YYYY-MM-DD) for Xero API compatibility
+      const normalizedDateString = formatDateForXero(billData.DateString);
+      const normalizedDueDateString = formatDateForXero(billData.DueDateString);
+      
       // Prepare the invoice data in Xero's expected format
       const invoice = {
          type: billData.Type || 'ACCPAY',
          contact: {
             name: billData.Contact?.Name || billData.Contact?.name
          },
-         date: billData.DateString,
-         dueDate: billData.DueDateString,
+         date: normalizedDateString,
+         dueDate: normalizedDueDateString,
          invoiceNumber: billData.InvoiceNumber,
          currencyCode: billData.CurrencyCode || 'GBP',
          status: billData.Status || 'DRAFT',
