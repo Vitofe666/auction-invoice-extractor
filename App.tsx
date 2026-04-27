@@ -1,276 +1,194 @@
-import React, { useState, useCallback } from 'react';
-import type { InvoiceData } from './types';
-import { extractInvoiceData } from './services/geminiService';
-import Header from './components/Header';
-import FileUpload from './components/FileUpload';
-import DataDisplay from './components/DataDisplay';
-import JsonViewer from './components/JsonViewer';
-import Loader from './components/Loader';
-import XeroIntegration from './components/XeroIntegration';
-import { ImageIcon, AlertTriangleIcon, FileTextIcon } from './components/icons';
+import { useMemo, useState } from 'react';
+import type { ReportRecord, ReportResult, ReportSections } from './types';
+import { exportDocx, exportPdf, generateReports, updateReport } from './services/reportApi';
 
-interface InvoiceItem {
-  file: File;
-  data: InvoiceData | null;
-  error: string | null;
-  isProcessing: boolean;
+const SECTION_FIELDS: Array<{ key: keyof ReportSections; label: string }> = [
+  { key: 'itemOverview', label: 'Item Overview' },
+  { key: 'materialsAndGemstones', label: 'Materials and Gemstones Analysis' },
+  { key: 'conditionAssessment', label: 'Condition Assessment' },
+  { key: 'authenticityObservations', label: 'Authenticity Observations' },
+  { key: 'weightAndMeasurements', label: 'Weight and Measurement Validation' },
+  { key: 'marketAndValuationInsight', label: 'Market and Valuation Insight' },
+];
+
+function parseUrls(input: string): string[] {
+  return input
+    .split(/\r?\n|,/) 
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
-const normalizeBaseUrl = (url: string | undefined): string => {
-  if (!url) return '';
-  return url.endsWith('/') ? url.slice(0, -1) : url;
-};
-
-// OLD:
-// const configuredBackend = normalizeBaseUrl(import.meta.env?.VITE_BACKEND_URL as string | undefined);
-// const extractEndpoint = configuredBackend ? `${configuredBackend}/api/extract-invoice` : '/api/extract-invoice';
-
-// NEW: use a Gemini-specific env var
-const configuredGeminiBackend = normalizeBaseUrl(
-  import.meta.env?.VITE_GEMINI_BACKEND_URL as string | undefined
-);
-const extractEndpoint = configuredGeminiBackend
-  ? `${configuredGeminiBackend}/api/extract-invoice`
-  : '/api/extract-invoice';
-
-const App: React.FC = () => {
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<InvoiceData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+function App() {
+  const [urlInput, setUrlInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [batchMode, setBatchMode] = useState<boolean>(false);
-  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+  const [results, setResults] = useState<ReportResult[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  const handleFileChange = (fileOrFiles: File | File[]) => {
-    console.log('App.tsx - handleFileChange called with:', fileOrFiles);
-    
-    if (Array.isArray(fileOrFiles)) {
-      // Batch mode
-      console.log('App.tsx - Batch mode activated with', fileOrFiles.length, 'files');
-      setBatchMode(true);
-      setInvoiceItems(fileOrFiles.map(file => ({
-        file,
-        data: null,
-        error: null,
-        isProcessing: false
-      })));
-      setImageFile(null);
-      setExtractedData(null);
-      setError(null);
-    } else if (fileOrFiles) {
-      // Single mode
-      console.log('App.tsx - Single mode activated with file:', fileOrFiles.name, fileOrFiles.type);
-      setBatchMode(false);
-      setInvoiceItems([]);
-      setImageFile(fileOrFiles);
-      if (fileOrFiles.type.startsWith('image/')) {
-        setPreviewUrl(URL.createObjectURL(fileOrFiles));
-      } else {
-        setPreviewUrl(null);
-      }
-      setExtractedData(null);
-      setError(null);
+  const reportCount = useMemo(() => results.filter((entry) => entry.ok && entry.record).length, [results]);
+
+  const onGenerate = async () => {
+    const urls = parseUrls(urlInput);
+    if (!urls.length) {
+      setError('Enter at least one lot URL.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const generated = await generateReports(urls);
+      setResults(generated);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Failed to generate report.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleExtract = useCallback(async () => {
-    if (batchMode && invoiceItems.length > 0) {
-      // Batch processing
-      setIsLoading(true);
-      setError(null);
-      
-      for (let i = 0; i < invoiceItems.length; i++) {
-        setInvoiceItems(prev => prev.map((item, idx) => 
-          idx === i ? { ...item, isProcessing: true } : item
-        ));
-        
-        try {
-          const data = await extractInvoiceData(invoiceItems[i].file, extractEndpoint);
-          setInvoiceItems(prev => prev.map((item, idx) => 
-            idx === i ? { ...item, data, isProcessing: false } : item
-          ));
-        } catch (err) {
-          console.error(err);
-          setInvoiceItems(prev => prev.map((item, idx) => 
-            idx === i ? { 
-              ...item, 
-              error: err instanceof Error ? err.message : "Extraction failed",
-              isProcessing: false 
-            } : item
-          ));
-        }
-      }
-      
-      setIsLoading(false);
-    } else if (!batchMode && imageFile) {
-      // Single file processing
-      setIsLoading(true);
-      setError(null);
-      setExtractedData(null);
+  const onSectionEdit = (reportId: string, section: keyof ReportSections, value: string) => {
+    setResults((previous) =>
+      previous.map((entry) => {
+        if (!entry.record || entry.record.id !== reportId) return entry;
+        return {
+          ...entry,
+          record: {
+            ...entry.record,
+            report: {
+              ...entry.record.report,
+              [section]: value,
+            },
+          },
+        };
+      }),
+    );
+  };
 
-      try {
-        const data = await extractInvoiceData(imageFile, extractEndpoint);
-        setExtractedData(data);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "An unknown error occurred during data extraction.");
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      setError("Please select file(s) first.");
+  const onSaveEdit = async (record: ReportRecord) => {
+    setSavingId(record.id);
+    try {
+      const updated = await updateReport(record.id, record.report);
+      setResults((previous) =>
+        previous.map((entry) =>
+          entry.record?.id === record.id
+            ? {
+                ...entry,
+                record: updated,
+              }
+            : entry,
+        ),
+      );
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save report edits.');
+    } finally {
+      setSavingId(null);
     }
-  }, [imageFile, batchMode, invoiceItems]);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-sans">
-      <Header />
-      <main className="flex-grow container mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column: Input */}
-        <div className="flex flex-col space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-cyan-400">1. Upload Invoice (Image or PDF)</h2>
-            <label className="flex items-center space-x-2 text-sm">
-              <input 
-                type="checkbox" 
-                checked={batchMode} 
-                onChange={(e) => {
-                  setBatchMode(e.target.checked);
-                  if (!e.target.checked) {
-                    setInvoiceItems([]);
-                  } else {
-                    setImageFile(null);
-                    setExtractedData(null);
-                  }
-                }}
-                disabled={isLoading}
-                className="w-4 h-4"
-              />
-              <span className="text-gray-300">Batch Mode (Multiple Files)</span>
-            </label>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <FileUpload onFileSelect={handleFileChange} disabled={isLoading} multiple={batchMode} />
-          </div>
-          {batchMode && invoiceItems.length > 0 && (
-            <div className="mt-4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-300">Files Selected: {invoiceItems.length}</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {invoiceItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-gray-700 rounded text-sm">
-                    <span className="truncate flex-1">{item.file.name}</span>
-                    {item.isProcessing && <span className="text-yellow-400 text-xs ml-2">Processing...</span>}
-                    {item.data && <span className="text-green-400 text-xs ml-2">✓ Extracted</span>}
-                    {item.error && <span className="text-red-400 text-xs ml-2">✗ Failed</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {!batchMode && imageFile && (
-            <div className="mt-4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-300">File Preview</h3>
-              <div className="relative w-full h-96 rounded-md border-2 border-gray-700 flex items-center justify-center p-2">
-                {imageFile.type.startsWith('image/') && previewUrl ? (
-                  <img src={previewUrl} alt="Invoice preview" className="max-w-full max-h-full object-contain" />
-                ) : (
-                  <div className="text-center text-gray-400 flex flex-col items-center">
-                    <FileTextIcon className="w-24 h-24 text-gray-500" />
-                    <p className="mt-4 font-semibold break-all">{imageFile.name}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <div className="mt-6">
-            <button
-              onClick={handleExtract}
-              disabled={(!imageFile && invoiceItems.length === 0) || isLoading}
-              className="w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-gray-900 bg-cyan-400 hover:bg-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 transition-all duration-300"
-            >
-              {isLoading ? `Extracting Data... ${invoiceItems.filter(i => i.data || i.error).length}/${invoiceItems.length}` : '2. Extract Data'}
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4">
+      <div className="max-w-5xl mx-auto space-y-8">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-bold text-cyan-300">Auction Lot AI Report Generator</h1>
+          <p className="text-slate-300">
+            Paste one or more auction lot URLs, extract listing data with Playwright, and generate a professional
+            multimodal jewellery report.
+          </p>
+        </header>
 
-        {/* Right Column: Output */}
-        <div className="flex flex-col space-y-6">
-          <h2 className="text-2xl font-bold text-cyan-400">3. Extracted Data</h2>
-          <div className="bg-gray-800 rounded-lg shadow-lg min-h-[600px] flex flex-col p-6 relative">
-            {isLoading && (
-              <div className="absolute inset-0 bg-gray-800 bg-opacity-75 flex flex-col justify-center items-center rounded-lg z-10">
-                <Loader />
-                <p className="mt-4 text-lg font-semibold text-cyan-400">Analyzing Invoice...</p>
-              </div>
-            )}
-            {!isLoading && !extractedData && !error && invoiceItems.length === 0 && (
-              <div className="m-auto text-center text-gray-500">
-                <ImageIcon className="mx-auto h-16 w-16" />
-                <p className="mt-4 text-lg">Upload an invoice image or PDF and click "Extract Data" to see the results here.</p>
-              </div>
-            )}
-            {!isLoading && batchMode && invoiceItems.length > 0 && (
-              <div className="space-y-4 overflow-y-auto">
-                {invoiceItems.map((item, idx) => (
-                  <div key={idx} className="border border-gray-700 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-cyan-400 truncate">{item.file.name}</h3>
-                      {item.isProcessing && <span className="text-yellow-400 text-sm">Processing...</span>}
-                      {item.data && <span className="text-green-400 text-sm">✓ Success</span>}
-                      {item.error && <span className="text-red-400 text-sm">✗ Failed</span>}
-                    </div>
-                    {item.data && (
-                      <div className="mt-2 space-y-4">
-                        <DataDisplay data={item.data} />
-                        <JsonViewer 
-                          data={{ InvoiceData: item.data }} 
-                          editable={true}
-                          onDataChange={(newData) => {
-                            if (newData.InvoiceData) {
-                              setInvoiceItems(prev => prev.map((prevItem, i) => 
-                                i === idx ? { ...prevItem, data: newData.InvoiceData } : prevItem
-                              ));
-                            }
-                          }}
-                        />
-                        <XeroIntegration invoiceData={item.data} originalFile={item.file} />
-                      </div>
-                    )}
-                    {item.error && (
-                      <p className="text-red-300 text-sm mt-2">{item.error}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {error && (
-              <div className="m-auto text-center text-red-400">
-                <AlertTriangleIcon className="mx-auto h-16 w-16" />
-                <p className="mt-4 text-lg font-semibold">Extraction Failed</p>
-                <p className="text-sm text-red-300 mt-2">{error}</p>
-              </div>
-            )}
-            {extractedData && (
-              <div className="flex flex-col space-y-6 overflow-y-auto">
-                <DataDisplay data={extractedData} />
-                <JsonViewer 
-                  data={{ InvoiceData: extractedData }} 
-                  editable={true}
-                  onDataChange={(newData) => {
-                    if (newData.InvoiceData) {
-                      setExtractedData(newData.InvoiceData);
-                    }
-                  }}
-                />
-                <XeroIntegration invoiceData={extractedData} originalFile={imageFile} />
-              </div>
-            )}
+        <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <label htmlFor="urlInput" className="block text-sm font-medium text-slate-200">
+            Auction lot URLs (one per line, or comma-separated)
+          </label>
+          <textarea
+            id="urlInput"
+            value={urlInput}
+            onChange={(event) => setUrlInput(event.target.value)}
+            placeholder="https://www.easyliveauction.com/catalogue/lot/..."
+            className="w-full min-h-32 rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm"
+          />
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onGenerate}
+              disabled={isLoading}
+              className="bg-cyan-400 hover:bg-cyan-300 text-slate-950 px-5 py-2 rounded-lg font-semibold disabled:opacity-50"
+            >
+              {isLoading ? 'Generating Report...' : 'Generate Report'}
+            </button>
+            {isLoading && <span className="text-sm text-slate-300 animate-pulse">Scraping, processing images, and running AI analysis…</span>}
           </div>
-        </div>
-      </main>
+
+          {error && <p className="text-rose-300 text-sm">{error}</p>}
+          {!!results.length && (
+            <p className="text-sm text-slate-300">
+              Completed {reportCount} report(s), {results.length - reportCount} failure(s).
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-6">
+          {results.map((entry) => (
+            <article key={entry.url} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+              <h2 className="text-xl text-cyan-300 font-semibold break-all">{entry.url}</h2>
+
+              {!entry.ok || !entry.record ? (
+                <p className="text-rose-300 text-sm">Failed: {entry.error || 'Unknown error'}</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="px-2 py-1 rounded bg-slate-800">{entry.fromCache ? 'Cached result' : 'Fresh analysis'}</span>
+                    <span className="px-2 py-1 rounded bg-slate-800">{entry.record.scrapedLot.images.length} image(s) analyzed</span>
+                    <span className="px-2 py-1 rounded bg-slate-800">Lot: {entry.record.scrapedLot.title}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {SECTION_FIELDS.map((section) => (
+                      <label key={section.key} className="block">
+                        <span className="text-sm text-slate-200 font-medium">{section.label}</span>
+                        <textarea
+                          value={entry.record.report[section.key]}
+                          onChange={(event) => onSectionEdit(entry.record!.id, section.key, event.target.value)}
+                          className="mt-1 w-full min-h-28 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm"
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <button
+                      onClick={() => onSaveEdit(entry.record!)}
+                      disabled={savingId === entry.record.id}
+                      className="px-4 py-2 rounded bg-emerald-400 text-slate-900 font-semibold disabled:opacity-50"
+                    >
+                      {savingId === entry.record.id ? 'Saving...' : 'Save Edits'}
+                    </button>
+                    <a
+                      href={exportPdf(entry.record.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 rounded bg-indigo-400 text-slate-900 font-semibold"
+                    >
+                      Download PDF
+                    </a>
+                    <a
+                      href={exportDocx(entry.record.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 rounded bg-violet-400 text-slate-900 font-semibold"
+                    >
+                      Download Word (.docx)
+                    </a>
+                  </div>
+                </>
+              )}
+            </article>
+          ))}
+        </section>
+      </div>
     </div>
   );
-};
+}
 
 export default App;
