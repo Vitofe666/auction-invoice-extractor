@@ -3,40 +3,26 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    console.log('Build mode:', mode);
-    console.log('VITE_API_KEY present:', !!env.VITE_API_KEY);
-    
-    return {
-      server: {
-        port: 5173,
-        host: '0.0.0.0',
-        // Proxy API requests to Gemini Proxy Server during local development
-        proxy: {
-          '/api': {
-            target: env.VITE_BACKEND_URL || 'http://localhost:3000',
-            changeOrigin: true,
-            secure: false,
-          },
-          '/health': {
-            target: env.VITE_BACKEND_URL || 'http://localhost:3000',
-            changeOrigin: true,
-            secure: false,
-          }
-        }
+  const env = loadEnv(mode, '.', '');
+  const backendTarget = env.VITE_BACKEND_URL || 'http://localhost:3001';
+
+  return {
+    server: {
+      port: 5173,
+      host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: backendTarget,
+          changeOrigin: true,
+          secure: false,
+        },
       },
-      plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_API_KEY),
-        'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || mode),
-        'process.env.VITE_BACKEND_URL': JSON.stringify(env.VITE_BACKEND_URL),
-        'process.env.VITE_MAX_RETRIES': JSON.stringify(env.VITE_MAX_RETRIES)
+    },
+    plugins: [react()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
       },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      }
-    };
+    },
+  };
 });

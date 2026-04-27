@@ -10,9 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:server": "ts-node server/geminiProxy.ts",
-    "build:server": "tsc -p tsconfig.server.json",
-    "start:server": "node ./dist/server/geminiProxy.js",
+    "dev:server": "tsx backend/auctionReportServer.ts",
+    "start:server": "node --import tsx backend/auctionReportServer.ts",
     "test:dates": "node tests/run-tests.cjs"
   },
   "dependencies": {
@@ -27,7 +26,11 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "3.4.3",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "docx": "^9.5.1",
+    "openai": "^5.12.2",
+    "pdfkit": "^0.17.2",
+    "playwright": "^1.55.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
