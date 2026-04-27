@@ -6,6 +6,8 @@ import { chromium } from 'playwright';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, HeadingLevel, TextRun } from 'docx';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 
 config();
 
@@ -308,7 +310,80 @@ function buildCacheKey(url: string): string {
   return crypto.createHash('sha256').update(url).digest('hex');
 }
 
-function writePdf(record: ReportRecord): Buffer {
+function isPrivateIpv4(address: string): boolean {
+  const octets = address.split('.').map((part) => Number(part));
+  if (octets.length !== 4 || octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) {
+    return true;
+  }
+
+  const [a, b] = octets;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    a === 0 ||
+    a >= 224
+  );
+}
+
+function isPrivateIpv6(address: string): boolean {
+  const normalized = address.toLowerCase();
+  return (
+    normalized === '::1' ||
+    normalized === '::' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80')
+  );
+}
+
+function isPrivateIp(address: string): boolean {
+  const family = net.isIP(address);
+  if (family === 4) return isPrivateIpv4(address);
+  if (family === 6) return isPrivateIpv6(address);
+  return true;
+}
+
+async function validateScrapeTarget(rawUrl: string): Promise<string> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL format.');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Only http:// and https:// URLs are supported.');
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error('URLs with embedded credentials are not allowed.');
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) {
+    throw new Error('Local network addresses are not allowed.');
+  }
+
+  if (isPrivateIp(hostname)) {
+    throw new Error('Private or loopback IP addresses are not allowed.');
+  }
+
+  const lookupRecords = await dns.lookup(hostname, { all: true });
+  if (!lookupRecords.length) {
+    throw new Error('Unable to resolve URL hostname.');
+  }
+
+  if (lookupRecords.some((record) => isPrivateIp(record.address))) {
+    throw new Error('Resolved hostname points to a private or local address.');
+  }
+
+  return parsed.toString();
+}
+
+async function writePdf(record: ReportRecord): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   const chunks: Buffer[] = [];
 
@@ -328,8 +403,13 @@ function writePdf(record: ReportRecord): Buffer {
     doc.moveDown();
   });
 
+  const completed = new Promise<Buffer>((resolve, reject) => {
+    doc.once('end', () => resolve(Buffer.concat(chunks)));
+    doc.once('error', reject);
+  });
+
   doc.end();
-  return Buffer.concat(chunks);
+  return completed;
 }
 
 async function writeDocx(record: ReportRecord): Promise<Buffer> {
@@ -389,7 +469,8 @@ app.post('/api/reports/generate', async (req, res) => {
           }
         }
 
-        const scrapedLot = await scrapeLotPage(url);
+        const safeUrl = await validateScrapeTarget(url);
+        const scrapedLot = await scrapeLotPage(safeUrl);
         const images = await fetchImagesAsDataUrls(scrapedLot.images);
         const report = await generateAuctionReport(scrapedLot, images);
 
@@ -444,13 +525,13 @@ app.patch('/api/reports/:id', (req, res) => {
   return res.json({ record: updated });
 });
 
-app.get('/api/reports/:id/export/pdf', (req, res) => {
+app.get('/api/reports/:id/export/pdf', async (req, res) => {
   const existing = reportCache.get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Report not found.' });
   }
 
-  const pdf = writePdf(existing);
+  const pdf = await writePdf(existing);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="auction-report-${existing.id}.pdf"`);
   return res.send(pdf);
