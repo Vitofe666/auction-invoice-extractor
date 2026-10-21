@@ -1,51 +1,58 @@
-export enum LineType {
-  Lot = "Lot",
-  Premium = "Premium",
-  Surcharge = "Surcharge",
+export interface ScrapedLot {
+  url: string;
+  title: string;
+  description: string;
+  metadata: Record<string, string>;
+  images: string[];
 }
 
-export interface LineItem {
-  LineType: LineType;
-  LotNumber: string;
-  Description: string;
-  Quantity: number;
-  UnitPrice: number; // Base price before VAT
-  TaxType: string | null;
-  TaxRate: number | null; // Tax rate as percentage (e.g., 20 for 20%)
-  TaxAmount: number | null;
-  VatIncluded: boolean; // True if LineTotal includes VAT, false if VAT is to be added
-  LineTotal: number; // Total amount as shown on invoice
+/** Ficha master, 13 October 2026. Catalogue claims and specialist opinions are separate. */
+export interface ReportSections {
+  auctionHouse: string;
+  auctionDate: string;
+  lotNumber: string;
+  metal: string;
+  mainStones: string;
+  object: string;
+  period: string;
+  auctionHouseEstimate: string;
+  predictedHammer: string;
+  retail: string;
+  buyScore: number | null;
+  recommendation: string;
+  warnings: string;
+  gemstoneDetails: string;
+  diamondDetails: string;
+  metalValue: string;
+  periodWorkmanshipMaker: string;
+  sizeNotes: string;
+  condition: string;
+  catalogueInformation: string;
+  specialistAssessment: string;
+  valuationRationale: string;
+  conditionAndFollowUp: string;
 }
 
-export interface InvoiceData {
-  InvoiceNumber: string;
-  InvoiceDate: string; // YYYY-MM-DD
-  SupplierName: string;
-  TotalAmount: number;
-  Currency: string;
-  LineItems: LineItem[];
+export interface RepresentativeImage {
+  sourceUrl: string;
+  /** Original downloaded JPEG/PNG bytes; never AI-generated or retouched. */
+  dataUrl: string;
 }
 
-// Xero API specific types
-export interface XeroContact {
-  Name: string;
+export interface ReportRecord {
+  id: string;
+  url: string;
+  scrapedLot: ScrapedLot;
+  report: ReportSections;
+  representativeImage: RepresentativeImage;
+  imageAssets: RepresentativeImage[];
+  generatedAt: string;
 }
 
-export interface XeroLineItem {
-  Description: string;
-  Quantity: number;
-  UnitAmount: number;
-  AccountCode: string;
-  LineAmount: number;
-}
-
-export interface XeroBill {
-  Type: 'ACCPAY';
-  Contact: XeroContact;
-  DateString: string;
-  DueDateString?: string;
-  InvoiceNumber: string;
-  CurrencyCode: string;
-  Status: 'DRAFT';
-  LineItems: XeroLineItem[];
+export interface ReportResult {
+  ok: boolean;
+  url: string;
+  fromCache?: boolean;
+  record?: ReportRecord;
+  error?: string;
 }
