@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "App.tsx", "index.tsx", "vite-env.d.ts", "vite.config.ts", "types.ts", "ficha.ts",
+    "services/reportApi.ts", "backend/auctionReportServer.ts", "backend/fichaExport.ts",
+    "tests/ficha.fixture.ts", "tests/fichaExport.test.ts"
+  ],
+  "exclude": ["node_modules", "dist", "tmp"]
+}

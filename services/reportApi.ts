@@ -28,10 +28,10 @@ export async function generateReports(urls: string[]): Promise<ReportResult[]> {
   return response.results;
 }
 
-export async function updateReport(id: string, report: Partial<ReportSections>): Promise<ReportRecord> {
+export async function updateReport(id: string, report: Partial<ReportSections>, representativeImageSource?: string): Promise<ReportRecord> {
   const response = await jsonRequest<{ record: ReportRecord }>(`${API_BASE}/api/reports/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ report }),
+    body: JSON.stringify({ report, representativeImageSource }),
   });
 
   return response.record;
@@ -44,3 +44,4 @@ export function exportPdf(id: string): string {
 export function exportDocx(id: string): string {
   return `${API_BASE}/api/reports/${id}/export/docx`;
 }
+

@@ -3,8 +3,9 @@ import cors from 'cors';
 import { config } from 'dotenv';
 import OpenAI from 'openai';
 import { chromium } from 'playwright';
-import PDFDocument from 'pdfkit';
-import { Document, Packer, Paragraph, HeadingLevel, TextRun } from 'docx';
+import { writePdf, writeDocx } from './fichaExport';
+import { REPORT_SCHEMA, REPORT_SYSTEM_PROMPT, validateReport } from '../ficha';
+import type { ScrapedLot, ReportSections, ReportRecord, RepresentativeImage } from '../types';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import net from 'node:net';
@@ -27,67 +28,8 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-type SectionKey =
-  | 'itemOverview'
-  | 'materialsAndGemstones'
-  | 'conditionAssessment'
-  | 'authenticityObservations'
-  | 'weightAndMeasurements'
-  | 'marketAndValuationInsight';
-
-interface ScrapedLot {
-  url: string;
-  title: string;
-  description: string;
-  metadata: Record<string, string>;
-  images: string[];
-}
-
-interface ReportSections {
-  itemOverview: string;
-  materialsAndGemstones: string;
-  conditionAssessment: string;
-  authenticityObservations: string;
-  weightAndMeasurements: string;
-  marketAndValuationInsight: string;
-}
-
-interface ReportRecord {
-  id: string;
-  url: string;
-  scrapedLot: ScrapedLot;
-  report: ReportSections;
-  generatedAt: string;
-}
-
 const reportCache = new Map<string, ReportRecord>();
 const urlToCacheKey = new Map<string, string>();
-
-const REPORT_SYSTEM_PROMPT = `You are a senior jewellery specialist writing formal auction-house reports. You will receive lot text and images.
-Return only valid JSON with these exact keys:
-{
-  "itemOverview": "...",
-  "materialsAndGemstones": "...",
-  "conditionAssessment": "...",
-  "authenticityObservations": "...",
-  "weightAndMeasurements": "...",
-  "marketAndValuationInsight": "..."
-}
-Rules:
-- Professional, concise, evidence-based tone.
-- Use complete paragraphs with bullet points only where useful.
-- If evidence is missing, explicitly state limitations.
-- Do not invent hallmarks, weights, dimensions, provenance, or market prices.
-- Mention confidence level when information is uncertain.`;
-
-const SECTION_TITLES: Record<SectionKey, string> = {
-  itemOverview: 'Item Overview',
-  materialsAndGemstones: 'Materials and Gemstones Analysis',
-  conditionAssessment: 'Condition Assessment',
-  authenticityObservations: 'Authenticity Observations',
-  weightAndMeasurements: 'Weight and Measurement Validation',
-  marketAndValuationInsight: 'Market and Valuation Insight',
-};
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -181,6 +123,7 @@ async function scrapeLotPage(url: string): Promise<ScrapedLot> {
       });
 
       const imageSources = Array.from(document.querySelectorAll('img'))
+        .filter(img => !/logo|icon|avatar|banner/i.test([img.className, img.getAttribute('src'), img.alt].join(' ')))
         .map((img) =>
           img.getAttribute('data-zoom') ||
           img.getAttribute('data-src') ||
@@ -190,6 +133,8 @@ async function scrapeLotPage(url: string): Promise<ScrapedLot> {
         )
         .filter(Boolean);
 
+      const primaryImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+      if (primaryImage) imageSources.unshift(primaryImage);
       const metaEstimate = text('[class*="estimate"], [id*="estimate"]');
       if (metaEstimate && !metadata.Estimate) {
         metadata.Estimate = metaEstimate;
@@ -227,28 +172,50 @@ async function scrapeLotPage(url: string): Promise<ScrapedLot> {
   }
 }
 
-async function fetchImagesAsDataUrls(imageUrls: string[]): Promise<string[]> {
-  const results: string[] = [];
-
-  for (const imageUrl of imageUrls) {
+async function fetchImagesAsDataUrls(imageUrls: string[]): Promise<RepresentativeImage[]> {
+  const results: RepresentativeImage[] = [];
+  for (const sourceUrl of imageUrls) {
     try {
-      const response = await fetch(imageUrl, { headers: { 'User-Agent': 'AuctionReportBot/1.0' } });
-      if (!response.ok) continue;
-
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
-      const arrayBuffer = await response.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
-      results.push(`data:${contentType};base64,${base64}`);
+      let url = sourceUrl;
+      let response: Response | undefined;
+      for (let redirects = 0; redirects <= 3; redirects++) {
+        await validateScrapeTarget(url);
+        response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location) throw new Error('Missing image redirect.');
+          await response.body?.cancel();
+          url = new URL(location, url).toString();
+        } else break;
+      }
+      if (!response?.ok) continue;
+      const contentType = response.headers.get('content-type')?.split(';')[0];
+      if (!['image/jpeg', 'image/png'].includes(contentType || '')) { await response.body?.cancel(); continue; }
+      const reader = response.body?.getReader();
+      if (!reader) continue;
+      const chunks: Uint8Array[] = [];
+      let length = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.length;
+        if (length > 8 * 1024 * 1024) { await reader.cancel(); throw new Error('Image exceeds 8MB.'); }
+        chunks.push(value);
+      }
+      const data = Buffer.concat(chunks);
+      // Validate actual bytes before retaining them; the exports preserve these bytes unchanged.
+      const { imageSize } = await import('image-size');
+      if (!['png', 'jpg'].includes(imageSize(data).type || '')) continue;
+      results.push({ sourceUrl, dataUrl: `data:${contentType};base64,${data.toString('base64')}` });
     } catch {
-      // Skip individual image failures; report generation can continue.
+      // Individual failures are skipped; generation requires at least one valid photograph.
     }
   }
-
   return results;
 }
 
 async function generateAuctionReport(scrapedLot: ScrapedLot, imageDataUrls: string[]): Promise<ReportSections> {
-  const content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
+  const content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string; detail: 'high' }> = [
     {
       type: 'input_text',
       text:
@@ -261,7 +228,7 @@ async function generateAuctionReport(scrapedLot: ScrapedLot, imageDataUrls: stri
   ];
 
   for (const imageUrl of imageDataUrls) {
-    content.push({ type: 'input_image', image_url: imageUrl });
+    content.push({ type: 'input_image', image_url: imageUrl, detail: 'high' });
   }
 
   const response = await openai.responses.create({
@@ -273,27 +240,9 @@ async function generateAuctionReport(scrapedLot: ScrapedLot, imageDataUrls: stri
     text: {
       format: {
         type: 'json_schema',
-        name: 'auction_report',
-        schema: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            itemOverview: { type: 'string' },
-            materialsAndGemstones: { type: 'string' },
-            conditionAssessment: { type: 'string' },
-            authenticityObservations: { type: 'string' },
-            weightAndMeasurements: { type: 'string' },
-            marketAndValuationInsight: { type: 'string' },
-          },
-          required: [
-            'itemOverview',
-            'materialsAndGemstones',
-            'conditionAssessment',
-            'authenticityObservations',
-            'weightAndMeasurements',
-            'marketAndValuationInsight',
-          ],
-        },
+        name: 'jewellery_ficha_2026_10_13',
+        strict: true,
+        schema: REPORT_SCHEMA,
       },
     },
   });
@@ -303,7 +252,9 @@ async function generateAuctionReport(scrapedLot: ScrapedLot, imageDataUrls: stri
     throw new Error('AI service returned an empty response.');
   }
 
-  return JSON.parse(outputText) as ReportSections;
+  const report: unknown = JSON.parse(outputText);
+  validateReport(report);
+  return report;
 }
 
 function buildCacheKey(url: string): string {
@@ -367,7 +318,7 @@ async function validateScrapeTarget(rawUrl: string): Promise<string> {
     throw new Error('Local network addresses are not allowed.');
   }
 
-  if (isPrivateIp(hostname)) {
+  if (net.isIP(hostname) && isPrivateIp(hostname)) {
     throw new Error('Private or loopback IP addresses are not allowed.');
   }
 
@@ -381,54 +332,6 @@ async function validateScrapeTarget(rawUrl: string): Promise<string> {
   }
 
   return parsed.toString();
-}
-
-async function writePdf(record: ReportRecord): Promise<Buffer> {
-  const doc = new PDFDocument({ size: 'A4', margin: 50 });
-  const chunks: Buffer[] = [];
-
-  doc.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-
-  doc.fontSize(18).text('Auction Lot Assessment Report', { align: 'left' });
-  doc.moveDown(0.5);
-  doc.fontSize(11).text(`Generated: ${new Date(record.generatedAt).toLocaleString()}`);
-  doc.text(`Source URL: ${record.url}`);
-  doc.text(`Lot Title: ${record.scrapedLot.title}`);
-  doc.moveDown();
-
-  (Object.keys(SECTION_TITLES) as SectionKey[]).forEach((sectionKey) => {
-    doc.fontSize(13).text(SECTION_TITLES[sectionKey], { underline: true });
-    doc.moveDown(0.3);
-    doc.fontSize(11).text(record.report[sectionKey], { align: 'left' });
-    doc.moveDown();
-  });
-
-  const completed = new Promise<Buffer>((resolve, reject) => {
-    doc.once('end', () => resolve(Buffer.concat(chunks)));
-    doc.once('error', reject);
-  });
-
-  doc.end();
-  return completed;
-}
-
-async function writeDocx(record: ReportRecord): Promise<Buffer> {
-  const children: Paragraph[] = [
-    new Paragraph({ text: 'Auction Lot Assessment Report', heading: HeadingLevel.TITLE }),
-    new Paragraph({ text: `Generated: ${new Date(record.generatedAt).toLocaleString()}` }),
-    new Paragraph({ text: `Source URL: ${record.url}` }),
-    new Paragraph({ text: `Lot Title: ${record.scrapedLot.title}` }),
-    new Paragraph(''),
-  ];
-
-  (Object.keys(SECTION_TITLES) as SectionKey[]).forEach((key) => {
-    children.push(new Paragraph({ text: SECTION_TITLES[key], heading: HeadingLevel.HEADING_1 }));
-    children.push(new Paragraph({ children: [new TextRun(record.report[key])] }));
-    children.push(new Paragraph(''));
-  });
-
-  const doc = new Document({ sections: [{ children }] });
-  return Buffer.from(await Packer.toBuffer(doc));
 }
 
 app.get('/api/health', (_req, res) => {
@@ -472,13 +375,16 @@ app.post('/api/reports/generate', async (req, res) => {
         const safeUrl = await validateScrapeTarget(url);
         const scrapedLot = await scrapeLotPage(safeUrl);
         const images = await fetchImagesAsDataUrls(scrapedLot.images);
-        const report = await generateAuctionReport(scrapedLot, images);
+        if (!images.length) throw new Error('No original JPEG/PNG lot photograph could be downloaded.');
+        const report = await generateAuctionReport(scrapedLot, images.map(image => image.dataUrl));
 
         const record: ReportRecord = {
           id: crypto.randomUUID(),
           url,
           scrapedLot,
           report,
+          imageAssets: images,
+          representativeImage: images[0],
           generatedAt: new Date().toISOString(),
         };
 
@@ -510,16 +416,18 @@ app.patch('/api/reports/:id', (req, res) => {
   }
 
   const incoming = req.body?.report as Partial<ReportSections>;
-  if (!incoming || typeof incoming !== 'object') {
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return res.status(400).json({ error: 'report payload is required.' });
   }
 
-  const next: ReportSections = {
-    ...existing.report,
-    ...incoming,
-  };
-
-  const updated: ReportRecord = { ...existing, report: next };
+  const next = { ...existing.report, ...incoming };
+  try { validateReport(next); } catch (error) {
+    return res.status(400).json({ error: (error as Error).message });
+  }
+  const sourceUrl = req.body.representativeImageSource ?? existing.representativeImage.sourceUrl;
+  const representativeImage = existing.imageAssets.find(image => image.sourceUrl === sourceUrl);
+  if (!representativeImage) return res.status(400).json({ error: 'Select a downloaded original lot photograph.' });
+  const updated: ReportRecord = { ...existing, report: next, representativeImage };
   reportCache.set(existing.id, updated);
 
   return res.json({ record: updated });
@@ -531,7 +439,10 @@ app.get('/api/reports/:id/export/pdf', async (req, res) => {
     return res.status(404).json({ error: 'Report not found.' });
   }
 
-  const pdf = await writePdf(existing);
+  let pdf: Buffer;
+  try { pdf = await writePdf(existing); } catch (error) {
+    return res.status(422).json({ error: (error as Error).message });
+  }
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="auction-report-${existing.id}.pdf"`);
   return res.send(pdf);
@@ -543,7 +454,10 @@ app.get('/api/reports/:id/export/docx', async (req, res) => {
     return res.status(404).json({ error: 'Report not found.' });
   }
 
-  const docx = await writeDocx(existing);
+  let docx: Buffer;
+  try { docx = await writeDocx(existing); } catch (error) {
+    return res.status(422).json({ error: (error as Error).message });
+  }
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   res.setHeader('Content-Disposition', `attachment; filename="auction-report-${existing.id}.docx"`);
   return res.send(docx);
@@ -552,3 +466,4 @@ app.get('/api/reports/:id/export/docx', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Auction report server running on http://localhost:${PORT}`);
 });
+
