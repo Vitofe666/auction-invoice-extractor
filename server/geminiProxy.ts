@@ -15,11 +15,13 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 // Log startup configuration
 console.log('=== Gemini Proxy Server Startup ===');
 console.log(`Server Port: ${PORT}`);
 console.log(`Node Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Gemini model: ${GEMINI_MODEL}`);
 console.log(`GEMINI_API_KEY present: ${!!process.env.GEMINI_API_KEY}`);
 if (!process.env.GEMINI_API_KEY) {
   console.error('❌ CRITICAL: GEMINI_API_KEY environment variable is not set!');
@@ -181,6 +183,27 @@ const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 /**
  * Helper function to get error category and user-friendly message
  */
+/**
+ * Retry transient Gemini failures (429 / 500 / 503 / overloaded) with exponential backoff.
+ */
+async function callGeminiWithRetry<T>(requestId: string, fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const msg = err?.message || String(err);
+      const transient = /\b(429|500|503)\b|RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|overloaded/i.test(msg);
+      if (!transient || attempt === maxAttempts) throw err;
+      const delayMs = 1000 * 2 ** (attempt - 1);
+      console.warn(`[${requestId}] ⚠️  Gemini attempt ${attempt} failed (${msg}); retrying in ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 function categorizeError(error: any): { category: string; message: string; isRetryable: boolean } {
   const errorMessage = error?.message || String(error);
   const errorString = JSON.stringify(error);
@@ -195,7 +218,7 @@ function categorizeError(error: any): { category: string; message: string; isRet
   }
 
   // Check for quota/rate limiting
-  if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+  if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
     return {
       category: 'RATE_LIMIT_ERROR',
       message: 'Gemini API rate limit exceeded. Please try again later.',
@@ -230,8 +253,30 @@ function categorizeError(error: any): { category: string; message: string; isRet
     };
   }
 
-  // Check for service unavailable
-  if (errorMessage.includes('503') || errorMessage.includes('service unavailable')) {
+  // Check for retired / unknown model (e.g. a model version that Google has shut down)
+  if (errorMessage.includes('404') || /model.*not found|not found.*model|is not supported for generateContent/i.test(errorMessage)) {
+    return {
+      category: 'MODEL_NOT_FOUND',
+      message: `Gemini model "${GEMINI_MODEL}" is unavailable (it may have been retired). Set the GEMINI_MODEL environment variable to a current model.`,
+      isRetryable: false,
+    };
+  }
+
+  // Check for bad request (invalid argument, unreadable file, schema problems)
+  if (errorMessage.includes('400') || errorMessage.includes('INVALID_ARGUMENT')) {
+    return {
+      category: 'INVALID_REQUEST',
+      message: 'Gemini rejected the request (invalid argument). The file may be corrupt, too large, or unreadable.',
+      isRetryable: false,
+    };
+  }
+
+  // Check for service unavailable / overloaded / internal errors on Google's side
+  if (
+    errorMessage.includes('503') ||
+    errorMessage.includes('500') ||
+    /service unavailable|overloaded|UNAVAILABLE|INTERNAL/i.test(errorMessage)
+  ) {
     return {
       category: 'SERVICE_UNAVAILABLE',
       message: 'Gemini API service is temporarily unavailable. Please try again later.',
@@ -397,7 +442,7 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
     const textPart = { text: promptText };
 
     console.log(`[${requestId}] Calling Gemini API...`);
-    console.log(`[${requestId}]   - Model: gemini-2.5-flash`);
+    console.log(`[${requestId}]   - Model: ${GEMINI_MODEL}`);
     console.log(`[${requestId}]   - Response format: application/json`);
     console.log(`[${requestId}]   - System instruction length: ${SYSTEM_INSTRUCTION.length} characters`);
     if (isPdf) {
@@ -408,8 +453,8 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
 
     let response: any;
     try {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+      response = await callGeminiWithRetry(requestId, () => ai!.models.generateContent({
+        model: GEMINI_MODEL,
         contents: [
           {
             role: 'user',
@@ -421,7 +466,7 @@ app.post('/api/extract-invoice', upload.single('image'), async (req: Request, re
           responseMimeType: 'application/json',
           responseSchema: INVOICE_SCHEMA,
         },
-      });
+      }));
     } catch (apiError: any) {
       const apiCallDuration = Date.now() - apiCallStartTime;
       console.error(`[${requestId}] ❌ Gemini API call failed after ${apiCallDuration}ms`);

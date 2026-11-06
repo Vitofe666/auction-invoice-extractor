@@ -5,6 +5,8 @@ services:
     buildCommand: npm install && npm run build:server
     startCommand: npm run start:server
     envVars:
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash  # change if Google retires this model
       - key: GEMINI_API_KEY
         sync: false  # Set this manually in Render dashboard for security
       - key: PORT

@@ -96,6 +96,12 @@ export const extractInvoiceData = async (
         const p = parsed as Record<string, unknown>;
         if (typeof p.message === "string") bodyMsg = `: ${p.message}`;
         else if (typeof p.error === "string") bodyMsg = `: ${p.error}`;
+        if (typeof p.details === "string" && p.details) bodyMsg += ` — ${p.details}`;
+        if (typeof p.technicalDetails === "string" && p.technicalDetails) {
+          bodyMsg += ` (${p.technicalDetails})`;
+        }
+        if (typeof p.category === "string") bodyMsg += ` [${p.category}]`;
+        if (typeof p.requestId === "string") bodyMsg += ` requestId=${p.requestId}`;
       }
     } catch {
       // ignore parsing for error message
